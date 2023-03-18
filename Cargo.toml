@@ -1,0 +1,15 @@
+[package]
+name = "ByteBite"
+version = "0.1.0"
+authors = ["Tapas Das", "dlaststark@gmail.com"]
+edition = "2021"
+description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essentials in a concise and efficient format."
+readme = "README.md"
+repository = "https://github.com/oss-rust-github-io/ByteBite"
+license = "GPL-3.0 license"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1.12.0", features = ["full"] }
