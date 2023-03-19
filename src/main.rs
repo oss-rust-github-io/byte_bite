@@ -1,22 +1,13 @@
+use byte_bite::RSSFeed;
 use std::error::Error;
-use reqwest;
-use rss::Channel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let response = reqwest::get("https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml".to_string()).await?;
-    //println!("{:?}", response);
+    let rss_feed_name = "Hindustan Times".to_string();
+    let rss_feed_url = "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml".to_string();
 
-    let content = response.bytes().await?;
-    //println!("{:?}", content);
-
-    let rss = Channel::read_from(&content[..])?;
-    //println!("{:?}", rss);
-
-    for item in rss.items() {
-        println!("Title: {:?}", item.title());
-        println!("Description: {:?}", item.description());
-    }
-
+    let rss_feed = RSSFeed::new(rss_feed_name, rss_feed_url);
+    let rss_article = rss_feed.get_articles().await?;
+    println!("{:#?}", rss_article);
     Ok(())
 }
