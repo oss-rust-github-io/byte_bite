@@ -1,13 +1,44 @@
-use byte_bite::RSSFeed;
-use std::error::Error;
+use crossterm::{
+    event::{self, Event as CEvent},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let rss_feed_name = "Hindustan Times".to_string();
-    let rss_feed_url = "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml".to_string();
+enum Event<I> {
+    Input(I),
+    Tick,
+}
 
-    let rss_feed = RSSFeed::new(rss_feed_name, rss_feed_url);
-    let rss_article = rss_feed.get_articles().await?;
-    println!("{:#?}", rss_article);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    enable_raw_mode().expect("can run in raw mode");
+
+    let (tx, _rx) = mpsc::channel();
+    let tick_rate = Duration::from_millis(200);
+
+    thread::spawn(move || {
+        let mut last_tick = Instant::now();
+        loop {
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| Duration::from_secs(0));
+
+            if event::poll(timeout).expect("poll works") {
+                if let CEvent::Key(key) = event::read().expect("can read events") {
+                    tx.send(Event::Input(key)).expect("can send events");
+                }
+            }
+
+            if last_tick.elapsed() >= tick_rate {
+                if let Ok(_) = tx.send(Event::Tick) {
+                    last_tick = Instant::now();
+                }
+            }
+        }
+    });
+
+    disable_raw_mode()?;
+
     Ok(())
 }
