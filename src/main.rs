@@ -2,9 +2,17 @@ use crossterm::{
     event::{self, Event as CEvent},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
+use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use tui::{
+    backend::CrosstermBackend,
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, Paragraph},
+    Terminal,
+};
 
 enum Event<I> {
     Input(I),
@@ -38,7 +46,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    disable_raw_mode()?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    terminal.clear()?;
 
-    Ok(())
+    let app_heading = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
+
+    loop {
+        terminal.draw(|rect| {
+            let size = rect.size();
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(2)
+                .constraints(
+                    [
+                        Constraint::Length(3),
+                        Constraint::Min(2),
+                        Constraint::Length(3),
+                    ]
+                    .as_ref(),
+                )
+                .split(size);
+
+            let heading = Paragraph::new(app_heading)
+                .style(Style::default().fg(Color::Yellow))
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::White))
+                        .title("Title")
+                        .border_type(BorderType::Plain),
+                );
+
+            rect.render_widget(heading, chunks[0]);
+        })?;
+
+        disable_raw_mode()?;
+    }
 }

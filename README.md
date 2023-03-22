@@ -7,4 +7,4 @@
 </p>
 
 # ByteBite
-Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essentials in a concise and efficient format.
+Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format.

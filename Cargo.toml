@@ -3,7 +3,7 @@ name = "byte_bite"
 version = "0.1.0"
 authors = ["Tapas Das", "dlaststark@gmail.com"]
 edition = "2021"
-description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essentials in a concise and efficient format."
+description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential  news in a pocket-size format."
 readme = "README.md"
 repository = "https://github.com/oss-rust-github-io/ByteBite"
 license = "GPL-3.0 license"
@@ -16,3 +16,4 @@ reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.12.0", features = ["full"] }
 crossterm = { version = "0.19", features = [ "serde" ] }
+tui = { version = "0.14", default-features = false, features = ['crossterm', 'serde'] }
