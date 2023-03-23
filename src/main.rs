@@ -139,7 +139,6 @@ fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<
         Block::default()
             .borders(Borders::ALL)
             .style(Style::default().fg(Color::White))
-            .title("Home")
             .border_type(BorderType::Plain),
     );
 
@@ -203,7 +202,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Block::default()
                         .borders(Borders::ALL)
                         .style(Style::default().fg(Color::White))
-                        .title("Title")
                         .border_type(BorderType::Plain),
                 );
 
@@ -226,6 +224,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rect.render_stateful_widget(left, rss_chunks[0], &mut rss_list_state);
             rect.render_stateful_widget(middle, rss_chunks[1], &mut rss_list_state);
             rect.render_widget(right, rss_chunks[2]);
+
+            let license = Paragraph::new("Released and maintained under GPL-3.0 license")
+                .style(Style::default().fg(Color::LightCyan))
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::White))
+                        .border_type(BorderType::Plain),
+                );
+
+            rect.render_widget(license, chunks[2]);
         })?;
 
         disable_raw_mode()?;
