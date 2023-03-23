@@ -18,7 +18,7 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Tabs},
     Terminal,
 };
 
@@ -176,6 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     let app_heading = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
+    let menu_titles = vec!["Add", "Update", "Delete", "Quit"];
     let mut rss_list_state = ListState::default();
     rss_list_state.select(Some(0));
 
@@ -187,6 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .margin(2)
                 .constraints(
                     [
+                        Constraint::Length(3),
                         Constraint::Length(3),
                         Constraint::Min(2),
                         Constraint::Length(3),
@@ -207,6 +209,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             rect.render_widget(heading, chunks[0]);
 
+            let menu = menu_titles
+                .iter()
+                .map(|t| {
+                    let (first, rest) = t.split_at(1);
+                    Spans::from(vec![
+                        Span::styled(
+                            first,
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::UNDERLINED),
+                        ),
+                        Span::styled(rest, Style::default().fg(Color::White)),
+                    ])
+                })
+                .collect();
+
+            let menu_titles = Tabs::new(menu)
+                .block(Block::default().title("Menu").borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().fg(Color::Yellow))
+                .divider(Span::raw(" | "));
+
+            rect.render_widget(menu_titles, chunks[1]);
+
             let rss_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(
@@ -217,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ]
                     .as_ref(),
                 )
-                .split(chunks[1]);
+                .split(chunks[2]);
 
             let left = render_rss_feed_list();
             let (middle, right) = render_rss_articles_list(&rss_list_state);
@@ -235,7 +261,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .border_type(BorderType::Plain),
                 );
 
-            rect.render_widget(license, chunks[2]);
+            rect.render_widget(license, chunks[3]);
         })?;
 
         disable_raw_mode()?;
