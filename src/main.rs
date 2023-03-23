@@ -1,22 +1,149 @@
+extern crate chrono;
+extern crate thiserror;
+
+use chrono::prelude::{DateTime, Utc};
 use crossterm::{
     event::{self, Event as CEvent},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
     Terminal,
 };
+
+const RSS_DB_PATH: &str = "data/rss_db.json";
+const ARTICLE_DB_PATH: &str = "data/article_db.json";
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("error reading the DB file: {0}")]
+    ReadDBError(#[from] io::Error),
+
+    #[error("error parsing the DB file: {0}")]
+    ParseDBError(#[from] serde_json::Error),
+}
 
 enum Event<I> {
     Input(I),
     Tick,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct RSSFeed {
+    id: usize,
+    rss_feed: String,
+    category: String,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Articles {
+    id: usize,
+    rss_id: usize,
+    title: String,
+    summary: String,
+    created_at: DateTime<Utc>,
+}
+
+fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
+    let db_content = fs::read_to_string(RSS_DB_PATH)?;
+    let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
+    Ok(parsed)
+}
+
+fn read_articles_db() -> Result<Vec<Articles>, Error> {
+    let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
+    let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
+    Ok(parsed)
+}
+
+fn render_rss_feed_list<'a>() -> List<'a> {
+    let rss_feeds = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("RSS Feeds")
+        .border_type(BorderType::Plain);
+
+    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+    let items: Vec<_> = rss_feed_list
+        .iter()
+        .map(|feed| {
+            ListItem::new(Spans::from(vec![Span::styled(
+                feed.rss_feed.clone(),
+                Style::default(),
+            )]))
+        })
+        .collect();
+
+    let rss_feed_list = List::new(items).block(rss_feeds).highlight_style(
+        Style::default()
+            .bg(Color::Yellow)
+            .fg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    rss_feed_list
+}
+
+fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<'a>) {
+    let articles = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White))
+        .title("Articles")
+        .border_type(BorderType::Plain);
+
+    let articles_list = read_articles_db().expect("can fetch RSS articles list");
+
+    let items: Vec<_> = articles_list
+        .iter()
+        .map(|feed| {
+            ListItem::new(Spans::from(vec![Span::styled(
+                feed.title.clone(),
+                Style::default(),
+            )]))
+        })
+        .collect();
+
+    let list = List::new(items).block(articles).highlight_style(
+        Style::default()
+            .bg(Color::Yellow)
+            .fg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    let selected_article = articles_list
+        .get(
+            list_state
+                .selected()
+                .expect("there is always a selected article"),
+        )
+        .expect("exists")
+        .clone();
+
+    let article_summary = Paragraph::new(vec![Spans::from(vec![Span::styled(
+        selected_article.summary,
+        Style::default().fg(Color::LightBlue),
+    )])])
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::White))
+            .title("Home")
+            .border_type(BorderType::Plain),
+    );
+
+    (list, article_summary)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,6 +177,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     let app_heading = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
+    let mut rss_list_state = ListState::default();
+    rss_list_state.select(Some(0));
 
     loop {
         terminal.draw(|rect| {
@@ -79,6 +208,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             rect.render_widget(heading, chunks[0]);
+
+            let rss_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    [
+                        Constraint::Percentage(20),
+                        Constraint::Percentage(30),
+                        Constraint::Percentage(50),
+                    ]
+                    .as_ref(),
+                )
+                .split(chunks[1]);
+
+            let left = render_rss_feed_list();
+            let (middle, right) = render_rss_articles_list(&rss_list_state);
+            rect.render_stateful_widget(left, rss_chunks[0], &mut rss_list_state);
+            rect.render_stateful_widget(middle, rss_chunks[1], &mut rss_list_state);
+            rect.render_widget(right, rss_chunks[2]);
         })?;
 
         disable_raw_mode()?;
