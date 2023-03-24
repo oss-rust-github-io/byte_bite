@@ -1,38 +1,25 @@
 extern crate chrono;
-extern crate thiserror;
+extern crate unicode_width;
+pub mod error_db;
 
-use chrono::prelude::{DateTime, Utc};
+use byte_bite::{render_rss_articles_list, render_rss_feed_list};
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use serde::{Deserialize, Serialize};
-use std::fs;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Span, Spans, Text},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs},
+    text::{Span, Spans},
+    widgets::{Block, BorderType, Borders, ListState, Paragraph, Tabs},
     Terminal,
 };
-
-const RSS_DB_PATH: &str = "data/rss_db.json";
-const ARTICLE_DB_PATH: &str = "data/article_db.json";
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("error reading the DB file: {0}")]
-    ReadDBError(#[from] io::Error),
-
-    #[error("error parsing the DB file: {0}")]
-    ParseDBError(#[from] serde_json::Error),
-}
+use unicode_width::UnicodeWidthStr;
 
 enum Event<I> {
     Input(I),
@@ -43,16 +30,6 @@ enum Event<I> {
 enum InputMode {
     Normal,
     Editing,
-}
-
-struct PopupApp {
-    show_popup: bool,
-}
-
-impl PopupApp {
-    fn new() -> PopupApp {
-        PopupApp { show_popup: false }
-    }
 }
 
 struct InputBoxApp {
@@ -67,205 +44,6 @@ impl InputBoxApp {
             input_mode: InputMode::Normal,
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct RSSFeed {
-    id: usize,
-    rss_feed: String,
-    category: String,
-    created_at: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Articles {
-    id: usize,
-    rss_id: usize,
-    title: String,
-    summary: String,
-    created_at: DateTime<Utc>,
-}
-
-fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
-    let db_content = fs::read_to_string(RSS_DB_PATH)?;
-    let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
-    Ok(parsed)
-}
-
-fn read_articles_db() -> Result<Vec<Articles>, Error> {
-    let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
-    let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
-    Ok(parsed)
-}
-
-fn render_rss_feed_list<'a>() -> List<'a> {
-    let rss_feeds = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
-        .title("RSS Feeds")
-        .border_type(BorderType::Plain);
-
-    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
-    let items: Vec<_> = rss_feed_list
-        .iter()
-        .map(|feed| {
-            ListItem::new(Spans::from(vec![Span::styled(
-                feed.rss_feed.clone(),
-                Style::default(),
-            )]))
-        })
-        .collect();
-
-    let rss_feed_list = List::new(items).block(rss_feeds).highlight_style(
-        Style::default()
-            .bg(Color::Yellow)
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
-    );
-
-    rss_feed_list
-}
-
-fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<'a>) {
-    let articles = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
-        .title("Articles")
-        .border_type(BorderType::Plain);
-
-    let articles_list = read_articles_db().expect("can fetch RSS articles list");
-
-    let items: Vec<_> = articles_list
-        .iter()
-        .map(|feed| {
-            ListItem::new(Spans::from(vec![Span::styled(
-                feed.title.clone(),
-                Style::default(),
-            )]))
-        })
-        .collect();
-
-    let list = List::new(items).block(articles).highlight_style(
-        Style::default()
-            .bg(Color::Yellow)
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let selected_article = articles_list
-        .get(
-            list_state
-                .selected()
-                .expect("there is always a selected article"),
-        )
-        .expect("exists")
-        .clone();
-
-    let article_summary = Paragraph::new(vec![Spans::from(vec![Span::styled(
-        selected_article.summary,
-        Style::default().fg(Color::LightBlue),
-    )])])
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .style(Style::default().fg(Color::White))
-            .border_type(BorderType::Plain),
-    );
-
-    (list, article_summary)
-}
-
-fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Percentage((100 - percent_y) / 2),
-                Constraint::Percentage(percent_y),
-                Constraint::Percentage((100 - percent_y) / 2),
-            ]
-            .as_ref(),
-        )
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ]
-            .as_ref(),
-        )
-        .split(popup_layout[1])[1]
-}
-
-fn popup_content(app: &InputBoxApp) -> (Paragraph, Paragraph, Paragraph, Paragraph) {
-    let (msg, style) = match app.input_mode {
-        InputMode::Normal => (
-            vec![
-                Span::raw("Press "),
-                Span::styled("x", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to exit, "),
-                Span::styled("e", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to enter RSS url"),
-            ],
-            Style::default().add_modifier(Modifier::RAPID_BLINK),
-        ),
-        InputMode::Editing => (
-            vec![
-                Span::raw("Press "),
-                Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to stop editing, "),
-                Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to submit the RSS url"),
-            ],
-            Style::default(),
-        ),
-    };
-
-    let mut text = Text::from(Spans::from(msg));
-    text.patch_style(style);
-    let help_message = Paragraph::new(text)
-        .style(Style::default().fg(Color::White))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .border_type(BorderType::Plain),
-        );
-
-    let rss_name = Paragraph::new(app.text_input.as_ref())
-        .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        })
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("RSS Feed Name"),
-        );
-
-    let rss_url = Paragraph::new(app.text_input.as_ref())
-        .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        })
-        .block(Block::default().borders(Borders::ALL).title("RSS Feed URL"));
-
-    let rss_description = Paragraph::new(app.text_input.as_ref())
-        .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
-        })
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("RSS Feed Description"),
-        );
-
-    (help_message, rss_name, rss_url, rss_description)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -295,7 +73,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let mut popup_app = PopupApp::new();
     let mut inputbox_app = InputBoxApp::new();
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
@@ -316,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Constraint::Length(3),
                         Constraint::Length(3),
                         Constraint::Min(2),
+                        Constraint::Length(3),
                         Constraint::Length(3),
                     ]
                     .as_ref(),
@@ -376,6 +154,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rect.render_stateful_widget(middle, rss_chunks[1], &mut rss_list_state);
             rect.render_widget(right, rss_chunks[2]);
 
+            let rss_url = Paragraph::new(inputbox_app.text_input.as_ref())
+                .style(match inputbox_app.input_mode {
+                    InputMode::Normal => Style::default(),
+                    InputMode::Editing => Style::default().fg(Color::Yellow),
+                })
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Add new RSS url"),
+                );
+            rect.render_widget(rss_url, chunks[3]);
+
+            match inputbox_app.input_mode {
+                InputMode::Normal => {}
+                InputMode::Editing => rect.set_cursor(
+                    chunks[3].x + inputbox_app.text_input.width() as u16 + 1,
+                    chunks[3].y + 1,
+                ),
+            }
+
             let license = Paragraph::new("Released and maintained under GPL-3.0 license")
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
@@ -386,63 +184,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .border_type(BorderType::Plain),
                 );
 
-            rect.render_widget(license, chunks[3]);
-
-            if popup_app.show_popup {
-                let block = Block::default()
-                    .title("Popup")
-                    .borders(Borders::ALL)
-                    .style(Style::default().fg(Color::Black));
-
-                let popup_area = show_popup(60, 40, size);
-                rect.render_widget(Clear, popup_area);
-                rect.render_widget(block, popup_area);
-
-                let popup_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(
-                        [
-                            Constraint::Percentage(15),
-                            Constraint::Percentage(20),
-                            Constraint::Percentage(30),
-                            Constraint::Percentage(35),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(popup_area);
-
-                let (help_message, rss_name, rss_url, rss_description) =
-                    popup_content(&inputbox_app);
-
-                rect.render_widget(help_message, popup_chunks[0]);
-                rect.render_widget(rss_name, popup_chunks[1]);
-                rect.render_widget(rss_url, popup_chunks[2]);
-                rect.render_widget(rss_description, popup_chunks[3]);
-            }
+            rect.render_widget(license, chunks[4]);
         })?;
 
         match rx.recv()? {
-            Event::Input(event) => match event.code {
-                KeyCode::Char('q') => {
-                    disable_raw_mode()?;
-                    terminal.clear()?;
-                    terminal.show_cursor()?;
-                    break;
-                }
-                KeyCode::Char('a') => {
-                    popup_app.show_popup = !popup_app.show_popup;
-
+            Event::Input(_event) => {
+                if let CEvent::Key(key) = event::read()? {
                     match inputbox_app.input_mode {
-                        InputMode::Normal => match event.code {
-                            KeyCode::Char('e') => {
+                        InputMode::Normal => match key.code {
+                            KeyCode::Char('a') => {
                                 inputbox_app.input_mode = InputMode::Editing;
                             }
-                            KeyCode::Char('x') => {
+                            KeyCode::Char('q') => {
+                                disable_raw_mode()?;
+                                terminal.clear()?;
+                                terminal.show_cursor()?;
                                 return Ok(());
                             }
                             _ => {}
                         },
-                        InputMode::Editing => match event.code {
+                        InputMode::Editing => match key.code {
                             KeyCode::Char(c) => {
                                 inputbox_app.text_input.push(c);
                             }
@@ -456,11 +217,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     }
                 }
-                _ => {}
-            },
+            }
             Event::Tick => {}
         }
     }
-
-    Ok(())
 }
