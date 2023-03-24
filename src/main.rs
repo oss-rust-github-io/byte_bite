@@ -2,7 +2,7 @@ extern crate chrono;
 extern crate unicode_width;
 pub mod error_db;
 
-use byte_bite::{render_rss_articles_list, render_rss_feed_list};
+use byte_bite::{render_rss_articles_list, render_rss_feed_list, write_rss_db};
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -204,6 +204,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             _ => {}
                         },
                         InputMode::Editing => match key.code {
+                            KeyCode::Enter => {
+                                let input_text: String =
+                                    inputbox_app.text_input.drain(..).collect::<String>();
+                                write_rss_db(input_text).expect("can add new rss feed");
+                            }
                             KeyCode::Char(c) => {
                                 inputbox_app.text_input.push(c);
                             }

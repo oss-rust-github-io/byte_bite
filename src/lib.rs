@@ -18,7 +18,7 @@ const RSS_DB_PATH: &str = "data/rss_db.json";
 const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
 #[derive(Serialize, Deserialize, Clone)]
-struct RSSFeed {
+pub struct RSSFeed {
     rss_id: usize,
     category: String,
     name: String,
@@ -27,7 +27,7 @@ struct RSSFeed {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct Articles {
+pub struct Articles {
     article_id: usize,
     rss_id: usize,
     title: String,
@@ -39,6 +39,28 @@ struct Articles {
 fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
     let db_content = fs::read_to_string(RSS_DB_PATH)?;
     let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
+    Ok(parsed)
+}
+
+pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
+    let split_parts = input_text.split(":").collect::<Vec<&str>>();
+    let mut parsed: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+    let max_id = parsed
+        .iter()
+        .max_by_key(|p| p.rss_id)
+        .map(|p| p.rss_id)
+        .expect("can fetch rss feed id");
+
+    let new_entry = RSSFeed {
+        rss_id: max_id + 1,
+        category: split_parts[0].trim().to_string(),
+        name: split_parts[1].trim().to_string(),
+        url: split_parts[2].trim().to_string(),
+        created_at: Utc::now(),
+    };
+
+    parsed.push(new_entry);
+    fs::write(RSS_DB_PATH, &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
 }
 
