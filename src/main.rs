@@ -3,7 +3,7 @@ extern crate thiserror;
 
 use chrono::prelude::{DateTime, Utc};
 use crossterm::{
-    event::{self, Event as CEvent},
+    event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde::{Deserialize, Serialize};
@@ -15,10 +15,10 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Tabs},
+    text::{Span, Spans, Text},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs},
     Terminal,
 };
 
@@ -37,6 +37,36 @@ pub enum Error {
 enum Event<I> {
     Input(I),
     Tick,
+}
+
+#[allow(dead_code)]
+enum InputMode {
+    Normal,
+    Editing,
+}
+
+struct PopupApp {
+    show_popup: bool,
+}
+
+impl PopupApp {
+    fn new() -> PopupApp {
+        PopupApp { show_popup: false }
+    }
+}
+
+struct InputBoxApp {
+    text_input: String,
+    input_mode: InputMode,
+}
+
+impl InputBoxApp {
+    fn new() -> InputBoxApp {
+        InputBoxApp {
+            text_input: String::new(),
+            input_mode: InputMode::Normal,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -145,10 +175,103 @@ fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<
     (list, article_summary)
 }
 
+fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
+}
+
+fn popup_content(app: &InputBoxApp) -> (Paragraph, Paragraph, Paragraph, Paragraph) {
+    let (msg, style) = match app.input_mode {
+        InputMode::Normal => (
+            vec![
+                Span::raw("Press "),
+                Span::styled("x", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" to exit, "),
+                Span::styled("e", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" to enter RSS url"),
+            ],
+            Style::default().add_modifier(Modifier::RAPID_BLINK),
+        ),
+        InputMode::Editing => (
+            vec![
+                Span::raw("Press "),
+                Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" to stop editing, "),
+                Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" to submit the RSS url"),
+            ],
+            Style::default(),
+        ),
+    };
+
+    let mut text = Text::from(Spans::from(msg));
+    text.patch_style(style);
+    let help_message = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White))
+                .border_type(BorderType::Plain),
+        );
+
+    let rss_name = Paragraph::new(app.text_input.as_ref())
+        .style(match app.input_mode {
+            InputMode::Normal => Style::default(),
+            InputMode::Editing => Style::default().fg(Color::Yellow),
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RSS Feed Name"),
+        );
+
+    let rss_url = Paragraph::new(app.text_input.as_ref())
+        .style(match app.input_mode {
+            InputMode::Normal => Style::default(),
+            InputMode::Editing => Style::default().fg(Color::Yellow),
+        })
+        .block(Block::default().borders(Borders::ALL).title("RSS Feed URL"));
+
+    let rss_description = Paragraph::new(app.text_input.as_ref())
+        .style(match app.input_mode {
+            InputMode::Normal => Style::default(),
+            InputMode::Editing => Style::default().fg(Color::Yellow),
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RSS Feed Description"),
+        );
+
+    (help_message, rss_name, rss_url, rss_description)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("can run in raw mode");
 
-    let (tx, _rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(200);
 
     thread::spawn(move || {
@@ -172,6 +295,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let mut popup_app = PopupApp::new();
+    let mut inputbox_app = InputBoxApp::new();
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
 
@@ -262,8 +387,80 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             rect.render_widget(license, chunks[3]);
+
+            if popup_app.show_popup {
+                let block = Block::default()
+                    .title("Popup")
+                    .borders(Borders::ALL)
+                    .style(Style::default().fg(Color::Black));
+
+                let popup_area = show_popup(60, 40, size);
+                rect.render_widget(Clear, popup_area);
+                rect.render_widget(block, popup_area);
+
+                let popup_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(
+                        [
+                            Constraint::Percentage(15),
+                            Constraint::Percentage(20),
+                            Constraint::Percentage(30),
+                            Constraint::Percentage(35),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(popup_area);
+
+                let (help_message, rss_name, rss_url, rss_description) =
+                    popup_content(&inputbox_app);
+
+                rect.render_widget(help_message, popup_chunks[0]);
+                rect.render_widget(rss_name, popup_chunks[1]);
+                rect.render_widget(rss_url, popup_chunks[2]);
+                rect.render_widget(rss_description, popup_chunks[3]);
+            }
         })?;
 
-        disable_raw_mode()?;
+        match rx.recv()? {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('q') => {
+                    disable_raw_mode()?;
+                    terminal.clear()?;
+                    terminal.show_cursor()?;
+                    break;
+                }
+                KeyCode::Char('a') => {
+                    popup_app.show_popup = !popup_app.show_popup;
+
+                    match inputbox_app.input_mode {
+                        InputMode::Normal => match event.code {
+                            KeyCode::Char('e') => {
+                                inputbox_app.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Char('x') => {
+                                return Ok(());
+                            }
+                            _ => {}
+                        },
+                        InputMode::Editing => match event.code {
+                            KeyCode::Char(c) => {
+                                inputbox_app.text_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                inputbox_app.text_input.pop();
+                            }
+                            KeyCode::Esc => {
+                                inputbox_app.input_mode = InputMode::Normal;
+                            }
+                            _ => {}
+                        },
+                    }
+                }
+                _ => {}
+            },
+            Event::Tick => {}
+        }
     }
+
+    Ok(())
 }
