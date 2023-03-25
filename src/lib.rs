@@ -70,7 +70,10 @@ fn read_articles_db() -> Result<Vec<Articles>, Error> {
     Ok(parsed)
 }
 
-pub fn render_rss_feed_list<'a>() -> List<'a> {
+pub fn render_rss_feed_list<'a>(
+    rss_list_state: &ListState,
+    article_list_state: &ListState,
+) -> (List<'a>, List<'a>, Paragraph<'a>) {
     let rss_feeds = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
@@ -88,27 +91,33 @@ pub fn render_rss_feed_list<'a>() -> List<'a> {
         })
         .collect();
 
-    let rss_feed_list = List::new(items).block(rss_feeds).highlight_style(
+    let rss_list = List::new(items).block(rss_feeds).highlight_style(
         Style::default()
             .bg(Color::Yellow)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    rss_feed_list
-}
+    let selected_rss_feed = rss_feed_list
+        .get(
+            rss_list_state
+                .selected()
+                .expect("there is always a selected RSS feed"),
+        )
+        .expect("exists")
+        .clone();
 
-pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<'a>) {
+    let rss_articles_list = read_articles_db().expect("can fetch RSS articles list");
+
     let articles = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("Articles")
         .border_type(BorderType::Plain);
 
-    let articles_list = read_articles_db().expect("can fetch RSS articles list");
-
-    let items: Vec<_> = articles_list
+    let items: Vec<_> = rss_articles_list
         .iter()
+        .filter(|r| r.rss_id == selected_rss_feed.rss_id)
         .map(|feed| {
             ListItem::new(Spans::from(vec![Span::styled(
                 feed.title.clone(),
@@ -117,16 +126,16 @@ pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragr
         })
         .collect();
 
-    let list = List::new(items).block(articles).highlight_style(
+    let article_list = List::new(items).block(articles).highlight_style(
         Style::default()
             .bg(Color::Yellow)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    let selected_article = articles_list
+    let selected_article = rss_articles_list
         .get(
-            list_state
+            article_list_state
                 .selected()
                 .expect("there is always a selected article"),
         )
@@ -144,5 +153,5 @@ pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragr
             .border_type(BorderType::Plain),
     );
 
-    (list, article_summary)
+    (rss_list, article_list, article_summary)
 }
