@@ -2,7 +2,9 @@ extern crate chrono;
 extern crate unicode_width;
 pub mod error_db;
 
-use byte_bite::{read_articles_db, read_rss_db, render_rss_feed_list, write_rss_db};
+use byte_bite::{
+    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db,
+};
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -49,7 +51,10 @@ impl InputBoxApp {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = write_articles_db().await?;
+
     enable_raw_mode().expect("can run in raw mode");
 
     let (tx, rx) = mpsc::channel();
@@ -197,6 +202,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         InputMode::Normal => match key.code {
                             KeyCode::Char('a') => {
                                 inputbox_app.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Char('r') => {
+                                let _ = write_articles_db().await?;
                             }
                             KeyCode::Down => {
                                 if let Some(selected) = rss_list_state.selected() {

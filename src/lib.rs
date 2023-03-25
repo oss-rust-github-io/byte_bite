@@ -3,6 +3,8 @@ pub mod error_db;
 
 use chrono::prelude::{DateTime, Utc};
 use error_db::Error;
+use reqwest;
+use rss::Channel;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tui::{
@@ -67,6 +69,42 @@ pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
     Ok(parsed)
+}
+
+pub async fn write_articles_db() -> Result<Vec<Articles>, Box<dyn std::error::Error>> {
+    let parsed: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+    let rss_links: Vec<(usize, String)> = parsed.into_iter().map(|r| (r.rss_id, r.url)).collect();
+    let mut articles_list: Vec<Articles> = vec![];
+
+    for (rss_id, url) in rss_links {
+        let response = reqwest::get(url).await?;
+        let content = response.bytes().await?;
+        let rss = Channel::read_from(&content[..])?;
+
+        for (article_id, item) in rss.items().iter().enumerate() {
+            let title = match item.title() {
+                Some(t) => t,
+                None => "",
+            };
+
+            let description = match item.description() {
+                Some(t) => t,
+                None => "",
+            };
+
+            let new_article = Articles {
+                article_id,
+                rss_id,
+                title: title.to_string(),
+                summary: description.to_string(),
+                created_at: Utc::now(),
+            };
+
+            articles_list.push(new_article);
+            fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
+        }
+    }
+    Ok(articles_list)
 }
 
 pub fn render_rss_feed_list<'a>(
