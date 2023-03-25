@@ -35,8 +35,7 @@ pub struct Articles {
     created_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
-fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
+pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
     let db_content = fs::read_to_string(RSS_DB_PATH)?;
     let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
     Ok(parsed)

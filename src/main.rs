@@ -2,7 +2,7 @@ extern crate chrono;
 extern crate unicode_width;
 pub mod error_db;
 
-use byte_bite::{render_rss_articles_list, render_rss_feed_list, write_rss_db};
+use byte_bite::{read_rss_db, render_rss_articles_list, render_rss_feed_list, write_rss_db};
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -194,6 +194,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         InputMode::Normal => match key.code {
                             KeyCode::Char('a') => {
                                 inputbox_app.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Down => {
+                                if let Some(selected) = rss_list_state.selected() {
+                                    let num_rss_feeds =
+                                        read_rss_db().expect("can fetch rss list").len();
+                                    if selected >= num_rss_feeds - 1 {
+                                        rss_list_state.select(Some(0));
+                                    } else {
+                                        rss_list_state.select(Some(selected + 1));
+                                    }
+                                }
+                            }
+                            KeyCode::Up => {
+                                if let Some(selected) = rss_list_state.selected() {
+                                    let num_rss_feeds =
+                                        read_rss_db().expect("can fetch rss list").len();
+                                    if selected > 0 {
+                                        rss_list_state.select(Some(selected - 1));
+                                    } else {
+                                        rss_list_state.select(Some(num_rss_feeds - 1));
+                                    }
+                                }
                             }
                             KeyCode::Char('q') => {
                                 disable_raw_mode()?;
