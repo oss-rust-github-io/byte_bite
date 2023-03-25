@@ -35,8 +35,7 @@ pub struct Articles {
     created_at: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
-fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
+pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
     let db_content = fs::read_to_string(RSS_DB_PATH)?;
     let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
     Ok(parsed)
@@ -64,21 +63,24 @@ pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
     Ok(parsed)
 }
 
-#[allow(dead_code)]
-fn read_articles_db() -> Result<Vec<Articles>, Error> {
+pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
     Ok(parsed)
 }
 
-pub fn render_rss_feed_list<'a>() -> List<'a> {
+pub fn render_rss_feed_list<'a>(
+    rss_list_state: &ListState,
+    article_list_state: &ListState,
+) -> (List<'a>, List<'a>, Paragraph<'a>) {
+    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+
     let rss_feeds = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("RSS Feeds")
         .border_type(BorderType::Plain);
 
-    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
     let items: Vec<_> = rss_feed_list
         .iter()
         .map(|feed| {
@@ -89,26 +91,35 @@ pub fn render_rss_feed_list<'a>() -> List<'a> {
         })
         .collect();
 
-    let rss_feed_list = List::new(items).block(rss_feeds).highlight_style(
+    let rss_list = List::new(items).block(rss_feeds).highlight_style(
         Style::default()
             .bg(Color::Yellow)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    rss_feed_list
-}
+    let selected_rss_feed = rss_feed_list
+        .get(
+            rss_list_state
+                .selected()
+                .expect("there is always a selected RSS feed"),
+        )
+        .expect("exists")
+        .clone();
 
-pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragraph<'a>) {
+    let rss_articles_list: Vec<Articles> = read_articles_db()
+        .expect("can fetch RSS articles list")
+        .into_iter()
+        .filter(|r| r.rss_id == selected_rss_feed.rss_id)
+        .collect();
+
     let articles = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("Articles")
         .border_type(BorderType::Plain);
 
-    let articles_list = read_articles_db().expect("can fetch RSS articles list");
-
-    let items: Vec<_> = articles_list
+    let items: Vec<_> = rss_articles_list
         .iter()
         .map(|feed| {
             ListItem::new(Spans::from(vec![Span::styled(
@@ -118,16 +129,16 @@ pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragr
         })
         .collect();
 
-    let list = List::new(items).block(articles).highlight_style(
+    let article_list = List::new(items).block(articles).highlight_style(
         Style::default()
             .bg(Color::Yellow)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    let selected_article = articles_list
+    let selected_article = rss_articles_list
         .get(
-            list_state
+            article_list_state
                 .selected()
                 .expect("there is always a selected article"),
         )
@@ -145,5 +156,5 @@ pub fn render_rss_articles_list<'a>(list_state: &ListState) -> (List<'a>, Paragr
             .border_type(BorderType::Plain),
     );
 
-    (list, article_summary)
+    (rss_list, article_list, article_summary)
 }

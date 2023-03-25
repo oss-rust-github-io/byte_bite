@@ -2,7 +2,7 @@ extern crate chrono;
 extern crate unicode_width;
 pub mod error_db;
 
-use byte_bite::{render_rss_articles_list, render_rss_feed_list, write_rss_db};
+use byte_bite::{read_articles_db, read_rss_db, render_rss_feed_list, write_rss_db};
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -20,6 +20,9 @@ use tui::{
     Terminal,
 };
 use unicode_width::UnicodeWidthStr;
+
+const APP_HEADING: &str = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
+const MENU_TITLES: [&'static str; 4] = ["Add", "Update", "Delete", "Quit"];
 
 enum Event<I> {
     Input(I),
@@ -77,10 +80,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
 
-    let app_heading = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
-    let menu_titles = vec!["Add", "Update", "Delete", "Quit"];
     let mut rss_list_state = ListState::default();
     rss_list_state.select(Some(0));
+
+    let mut articles_list_state = ListState::default();
+    articles_list_state.select(Some(0));
 
     loop {
         terminal.draw(|rect| {
@@ -100,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let heading = Paragraph::new(app_heading)
+            let heading = Paragraph::new(APP_HEADING)
                 .style(Style::default().fg(Color::Yellow))
                 .alignment(Alignment::Center)
                 .block(
@@ -112,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             rect.render_widget(heading, chunks[0]);
 
-            let menu = menu_titles
+            let menu = MENU_TITLES
                 .iter()
                 .map(|t| {
                     let (first, rest) = t.split_at(1);
@@ -148,10 +152,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(chunks[2]);
 
-            let left = render_rss_feed_list();
-            let (middle, right) = render_rss_articles_list(&rss_list_state);
+            let (left, middle, right) = render_rss_feed_list(&rss_list_state, &articles_list_state);
             rect.render_stateful_widget(left, rss_chunks[0], &mut rss_list_state);
-            rect.render_stateful_widget(middle, rss_chunks[1], &mut rss_list_state);
+            rect.render_stateful_widget(middle, rss_chunks[1], &mut articles_list_state);
             rect.render_widget(right, rss_chunks[2]);
 
             let rss_url = Paragraph::new(inputbox_app.text_input.as_ref())
@@ -194,6 +197,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         InputMode::Normal => match key.code {
                             KeyCode::Char('a') => {
                                 inputbox_app.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Down => {
+                                if let Some(selected) = rss_list_state.selected() {
+                                    let num_rss_feeds =
+                                        read_rss_db().expect("can fetch rss list").len();
+                                    if selected >= num_rss_feeds - 1 {
+                                        rss_list_state.select(Some(0));
+                                    } else {
+                                        rss_list_state.select(Some(selected + 1));
+                                    }
+                                }
+                            }
+                            KeyCode::Up => {
+                                if let Some(selected) = rss_list_state.selected() {
+                                    let num_rss_feeds =
+                                        read_rss_db().expect("can fetch rss list").len();
+                                    if selected > 0 {
+                                        rss_list_state.select(Some(selected - 1));
+                                    } else {
+                                        rss_list_state.select(Some(num_rss_feeds - 1));
+                                    }
+                                }
+                            }
+                            KeyCode::PageDown => {
+                                if let Some(selected) = articles_list_state.selected() {
+                                    let num_articles =
+                                        read_articles_db().expect("can fetch articles list").len();
+                                    if selected >= num_articles - 1 {
+                                        articles_list_state.select(Some(0));
+                                    } else {
+                                        articles_list_state.select(Some(selected + 1));
+                                    }
+                                }
+                            }
+                            KeyCode::PageUp => {
+                                if let Some(selected) = articles_list_state.selected() {
+                                    let num_articles =
+                                        read_rss_db().expect("can fetch articles list").len();
+                                    if selected > 0 {
+                                        articles_list_state.select(Some(selected - 1));
+                                    } else {
+                                        articles_list_state.select(Some(num_articles - 1));
+                                    }
+                                }
                             }
                             KeyCode::Char('q') => {
                                 disable_raw_mode()?;
