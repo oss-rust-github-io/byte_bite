@@ -63,8 +63,7 @@ pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
     Ok(parsed)
 }
 
-#[allow(dead_code)]
-fn read_articles_db() -> Result<Vec<Articles>, Error> {
+pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
     Ok(parsed)
@@ -74,13 +73,14 @@ pub fn render_rss_feed_list<'a>(
     rss_list_state: &ListState,
     article_list_state: &ListState,
 ) -> (List<'a>, List<'a>, Paragraph<'a>) {
+    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+
     let rss_feeds = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("RSS Feeds")
         .border_type(BorderType::Plain);
 
-    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
     let items: Vec<_> = rss_feed_list
         .iter()
         .map(|feed| {
@@ -107,7 +107,11 @@ pub fn render_rss_feed_list<'a>(
         .expect("exists")
         .clone();
 
-    let rss_articles_list = read_articles_db().expect("can fetch RSS articles list");
+    let rss_articles_list: Vec<Articles> = read_articles_db()
+        .expect("can fetch RSS articles list")
+        .into_iter()
+        .filter(|r| r.rss_id == selected_rss_feed.rss_id)
+        .collect();
 
     let articles = Block::default()
         .borders(Borders::ALL)
@@ -117,7 +121,6 @@ pub fn render_rss_feed_list<'a>(
 
     let items: Vec<_> = rss_articles_list
         .iter()
-        .filter(|r| r.rss_id == selected_rss_feed.rss_id)
         .map(|feed| {
             ListItem::new(Spans::from(vec![Span::styled(
                 feed.title.clone(),
