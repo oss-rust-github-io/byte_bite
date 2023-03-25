@@ -22,7 +22,7 @@ use tui::{
 use unicode_width::UnicodeWidthStr;
 
 const APP_HEADING: &str = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
-const MENU_TITLES: [&'static str; 4] = ["Add", "Update", "Delete", "Quit"];
+const MENU_TITLES: [&'static str; 5] = ["Add", "Delete", "Refresh", "Help", "Quit"];
 
 enum Event<I> {
     Input(I),
