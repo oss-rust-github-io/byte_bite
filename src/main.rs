@@ -3,7 +3,8 @@ extern crate unicode_width;
 pub mod error_db;
 
 use byte_bite::{
-    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db,
+    read_articles_db, read_rss_db, render_rss_feed_list, update_rss_db, write_articles_db,
+    write_rss_db,
 };
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
@@ -215,7 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("Add new RSS url"),
+                        .title("Add new RSS feed (<RSS category> : <RSS Name> : <RSS Url>)"),
                 );
             rect.render_widget(rss_url, chunks[3]);
 
@@ -266,6 +267,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         InputMode::Normal => match key.code {
                             KeyCode::Char('a') => {
                                 inputbox_app.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Char('d') => {
+                                update_rss_db(&mut rss_list_state).expect("can remove RSS feed");
                             }
                             KeyCode::Char('r') => {
                                 let selected = rss_list_state.selected().unwrap();

@@ -64,6 +64,21 @@ pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
     Ok(parsed)
 }
 
+pub fn update_rss_db(rss_list_state: &mut ListState) -> Result<(), Error> {
+    if let Some(selected) = rss_list_state.selected() {
+        let mut rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+        rss_feed_list.remove(selected);
+        fs::write(RSS_DB_PATH, &serde_json::to_vec(&rss_feed_list)?)?;
+
+        if selected > 0 {
+            rss_list_state.select(Some(selected - 1));
+        } else {
+            rss_list_state.select(Some(0));
+        }
+    }
+    Ok(())
+}
+
 pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
