@@ -16,25 +16,6 @@ use tui::{
 pub const RSS_DB_PATH: &str = "data/rss_db.json";
 pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
-#[derive(Clone, Copy)]
-pub struct GaugeApp {
-    pub current_value: f64,
-}
-
-impl GaugeApp {
-    pub fn new() -> GaugeApp {
-        GaugeApp { current_value: 0.0 }
-    }
-
-    pub fn trigger(&mut self, max_value: f64) {
-        self.current_value += 0.1 * ((1 as f64) / max_value);
-
-        if self.current_value > 1.0 {
-            self.current_value = 0.0;
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RSSFeed {
     pub rss_id: usize,
@@ -51,17 +32,6 @@ pub struct Articles {
     pub title: String,
     pub summary: String,
     pub created_at: DateTime<Utc>,
-}
-
-#[derive(Clone, Copy)]
-pub struct PopupApp {
-    pub show_popup: bool,
-}
-
-impl PopupApp {
-    pub fn new() -> PopupApp {
-        PopupApp { show_popup: false }
-    }
 }
 
 pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
@@ -98,24 +68,15 @@ pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     Ok(parsed)
 }
 
-pub fn write_articles_db(
-    rss_selected: usize,
-    mut gauge_app: GaugeApp,
-    mut popup_app: PopupApp,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::error::Error>> {
     let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
     let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
-    let content = match reqwest::blocking::get(selected_rss_feed.url) {
-        Ok(content) => content.bytes().unwrap(),
-        Err(_) => panic!("Invalid RSS response"),
-    };
+    let response = reqwest::get(selected_rss_feed.url).await?;
+    let content = response.bytes().await?;
     let rss = Channel::read_from(&content[..])?;
-    let max_value = rss.items().len() as u16;
     let mut articles_list: Vec<Articles> = vec![];
 
     for (article_id, item) in rss.items().iter().enumerate() {
-        gauge_app.trigger(max_value as f64);
-
         let title = match item.title() {
             Some(t) => t,
             None => "",
@@ -137,7 +98,6 @@ pub fn write_articles_db(
         articles_list.push(new_article);
         fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
     }
-    popup_app.show_popup = false;
     Ok(())
 }
 

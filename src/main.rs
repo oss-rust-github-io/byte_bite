@@ -3,8 +3,7 @@ extern crate unicode_width;
 pub mod error_db;
 
 use byte_bite::{
-    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db, GaugeApp,
-    PopupApp,
+    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db,
 };
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
@@ -19,7 +18,7 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, Clear, Gauge, ListState, Paragraph, Tabs},
+    widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Tabs},
     Terminal,
 };
 use unicode_width::UnicodeWidthStr;
@@ -32,10 +31,10 @@ enum Event<I> {
     Tick,
 }
 
-#[allow(dead_code)]
 enum InputMode {
     Normal,
     Editing,
+    Popup,
 }
 
 struct InputBoxApp {
@@ -49,6 +48,28 @@ impl InputBoxApp {
             text_input: String::new(),
             input_mode: InputMode::Normal,
         }
+    }
+}
+
+pub struct PopupApp {
+    pub show_popup: bool,
+    pub message: String,
+}
+
+impl PopupApp {
+    pub fn new() -> PopupApp {
+        PopupApp {
+            show_popup: false,
+            message: String::from(""),
+        }
+    }
+
+    pub fn progress_msg(&mut self) {
+        self.message = String::from("RSS feed refresh is in progress... Please wait.");
+    }
+
+    pub fn complete_msg(&mut self) {
+        self.message = String::from("RSS feed refresh is complete. (Press Esc to go back)");
     }
 }
 
@@ -78,7 +99,8 @@ fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("can run in raw mode");
 
     let (tx, rx) = mpsc::channel();
@@ -106,7 +128,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut popup_app = PopupApp::new();
-    let gauge_app = GaugeApp::new();
     let mut inputbox_app = InputBoxApp::new();
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
@@ -192,6 +213,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .style(match inputbox_app.input_mode {
                     InputMode::Normal => Style::default(),
                     InputMode::Editing => Style::default().fg(Color::Yellow),
+                    InputMode::Popup => Style::default(),
                 })
                 .block(
                     Block::default()
@@ -206,6 +228,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     chunks[3].x + inputbox_app.text_input.width() as u16 + 1,
                     chunks[3].y + 1,
                 ),
+                InputMode::Popup => {}
             }
 
             let license = Paragraph::new("Released and maintained under GPL-3.0 license")
@@ -221,31 +244,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rect.render_widget(license, chunks[4]);
 
             if popup_app.show_popup {
+                popup_app.progress_msg();
                 let area = show_popup(60, 20, size);
 
-                let label = Span::styled(
-                    format!("{:.2}%", gauge_app.current_value * 100.0),
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::ITALIC | Modifier::BOLD),
-                );
-
-                let gauge = Gauge::default()
+                let popup_text = Paragraph::new(popup_app.message.clone())
+                    .style(Style::default().fg(Color::LightCyan))
+                    .alignment(Alignment::Center)
                     .block(
                         Block::default()
-                            .title("Refreshing RSS Feed Articles")
-                            .borders(Borders::ALL),
-                    )
-                    .gauge_style(Style::default().fg(Color::Yellow))
-                    .ratio(gauge_app.current_value)
-                    .label(label)
-                    .use_unicode(true);
+                            .borders(Borders::ALL)
+                            .style(Style::default().fg(Color::White))
+                            .border_type(BorderType::Plain),
+                    );
 
                 rect.render_widget(Clear, area);
-                rect.render_widget(gauge, area);
-
-                let selected = rss_list_state.selected().unwrap();
-                let _ = write_articles_db(selected, gauge_app, popup_app);
+                rect.render_widget(popup_text, area);
             }
         })?;
 
@@ -258,7 +271,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 inputbox_app.input_mode = InputMode::Editing;
                             }
                             KeyCode::Char('r') => {
-                                popup_app.show_popup = !popup_app.show_popup;
+                                inputbox_app.input_mode = InputMode::Popup;
+
+                                let selected = rss_list_state.selected().unwrap();
+                                let handle = tokio::spawn(async move {
+                                    popup_app.show_popup = true;
+                                    let _ = write_articles_db(selected).await.unwrap();
+                                });
+
+                                handle.await.unwrap();
+                                popup_app.complete_msg();
                             }
                             KeyCode::PageDown => {
                                 if let Some(selected) = rss_list_state.selected() {
@@ -325,6 +347,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 inputbox_app.text_input.pop();
                             }
                             KeyCode::Esc => {
+                                inputbox_app.input_mode = InputMode::Normal;
+                            }
+                            _ => {}
+                        },
+                        InputMode::Popup => match key.code {
+                            KeyCode::Esc => {
+                                popup_app.show_popup = false;
                                 inputbox_app.input_mode = InputMode::Normal;
                             }
                             _ => {}
