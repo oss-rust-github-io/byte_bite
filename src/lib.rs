@@ -3,36 +3,37 @@ pub mod error_db;
 
 use chrono::prelude::{DateTime, Utc};
 use error_db::Error;
+use reqwest;
+use rss::Channel;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-#[allow(dead_code)]
-const RSS_DB_PATH: &str = "data/rss_db.json";
-
-#[allow(dead_code)]
-const ARTICLE_DB_PATH: &str = "data/article_db.json";
+pub const RSS_DB_PATH: &str = "data/rss_db.json";
+pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RSSFeed {
-    rss_id: usize,
-    category: String,
-    name: String,
-    url: String,
-    created_at: DateTime<Utc>,
+    pub rss_id: usize,
+    pub category: String,
+    pub name: String,
+    pub url: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Articles {
-    article_id: usize,
-    rss_id: usize,
-    title: String,
-    summary: String,
-    created_at: DateTime<Utc>,
+    pub article_id: usize,
+    pub rss_id: usize,
+    pub title: String,
+    pub summary: String,
+    pub article_link: String,
+    pub pub_date: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 }
 
 pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
@@ -67,6 +68,51 @@ pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
     Ok(parsed)
+}
+
+pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::error::Error>> {
+    let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
+    let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+    let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
+    let response = reqwest::get(selected_rss_feed.url).await?;
+    let content = response.bytes().await?;
+    let rss = Channel::read_from(&content[..])?;
+
+    for (article_id, item) in rss.items().iter().enumerate() {
+        let title = match item.title() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let summary = match item.description() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let article_link = match item.link() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let pub_date = match item.pub_date() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let new_article = Articles {
+            article_id,
+            rss_id: selected_rss_feed.rss_id,
+            title: title.to_string(),
+            summary: summary.to_string(),
+            article_link: article_link.to_string(),
+            pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap()),
+            created_at: Utc::now(),
+        };
+
+        articles_list.push(new_article);
+    }
+    fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
+    Ok(())
 }
 
 pub fn render_rss_feed_list<'a>(
@@ -107,11 +153,13 @@ pub fn render_rss_feed_list<'a>(
         .expect("exists")
         .clone();
 
-    let rss_articles_list: Vec<Articles> = read_articles_db()
+    let mut rss_articles_list: Vec<Articles> = read_articles_db()
         .expect("can fetch RSS articles list")
         .into_iter()
         .filter(|r| r.rss_id == selected_rss_feed.rss_id)
         .collect();
+
+    rss_articles_list.sort_by_key(|r| std::cmp::Reverse(r.pub_date));
 
     let articles = Block::default()
         .borders(Borders::ALL)
@@ -145,16 +193,36 @@ pub fn render_rss_feed_list<'a>(
         .expect("exists")
         .clone();
 
-    let article_summary = Paragraph::new(vec![Spans::from(vec![Span::styled(
-        selected_article.summary,
-        Style::default().fg(Color::LightBlue),
-    )])])
+    let article_summary = Paragraph::new(vec![
+        Spans::from(vec![Span::styled(
+            selected_article.title,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::styled(
+            selected_article.summary,
+            Style::default().fg(Color::LightBlue),
+        )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::styled(
+            format!("Published On: {}", selected_article.pub_date),
+            Style::default().fg(Color::White),
+        )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::styled(
+            format!("Link to the article: {}", selected_article.article_link),
+            Style::default().fg(Color::LightGreen),
+        )]),
+    ])
     .block(
         Block::default()
             .borders(Borders::ALL)
             .style(Style::default().fg(Color::White))
             .border_type(BorderType::Plain),
-    );
+    )
+    .wrap(Wrap { trim: true });
 
     (rss_list, article_list, article_summary)
 }
