@@ -3,7 +3,8 @@ extern crate unicode_width;
 pub mod error_db;
 
 use byte_bite::{
-    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db,
+    read_articles_db, read_rss_db, render_rss_feed_list, write_articles_db, write_rss_db, GaugeApp,
+    PopupApp,
 };
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
@@ -15,10 +16,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, ListState, Paragraph, Tabs},
+    widgets::{Block, BorderType, Borders, Clear, Gauge, ListState, Paragraph, Tabs},
     Terminal,
 };
 use unicode_width::UnicodeWidthStr;
@@ -51,10 +52,33 @@ impl InputBoxApp {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = write_articles_db().await?;
+fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
 
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("can run in raw mode");
 
     let (tx, rx) = mpsc::channel();
@@ -81,6 +105,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let mut popup_app = PopupApp::new();
+    let gauge_app = GaugeApp::new();
     let mut inputbox_app = InputBoxApp::new();
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
@@ -193,6 +219,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             rect.render_widget(license, chunks[4]);
+
+            if popup_app.show_popup {
+                let area = show_popup(60, 20, size);
+
+                let label = Span::styled(
+                    format!("{:.2}%", gauge_app.current_value * 100.0),
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::ITALIC | Modifier::BOLD),
+                );
+
+                let gauge = Gauge::default()
+                    .block(
+                        Block::default()
+                            .title("Refreshing RSS Feed Articles")
+                            .borders(Borders::ALL),
+                    )
+                    .gauge_style(Style::default().fg(Color::Yellow))
+                    .ratio(gauge_app.current_value)
+                    .label(label)
+                    .use_unicode(true);
+
+                rect.render_widget(Clear, area);
+                rect.render_widget(gauge, area);
+
+                let selected = rss_list_state.selected().unwrap();
+                let _ = write_articles_db(selected, gauge_app, popup_app);
+            }
         })?;
 
         match rx.recv()? {
@@ -204,9 +258,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 inputbox_app.input_mode = InputMode::Editing;
                             }
                             KeyCode::Char('r') => {
-                                let _ = write_articles_db().await?;
+                                popup_app.show_popup = !popup_app.show_popup;
                             }
-                            KeyCode::Down => {
+                            KeyCode::PageDown => {
                                 if let Some(selected) = rss_list_state.selected() {
                                     let num_rss_feeds =
                                         read_rss_db().expect("can fetch rss list").len();
@@ -217,7 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
-                            KeyCode::Up => {
+                            KeyCode::PageUp => {
                                 if let Some(selected) = rss_list_state.selected() {
                                     let num_rss_feeds =
                                         read_rss_db().expect("can fetch rss list").len();
@@ -228,7 +282,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
-                            KeyCode::PageDown => {
+                            KeyCode::Down => {
                                 if let Some(selected) = articles_list_state.selected() {
                                     let num_articles =
                                         read_articles_db().expect("can fetch articles list").len();
@@ -239,7 +293,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
-                            KeyCode::PageUp => {
+                            KeyCode::Up => {
                                 if let Some(selected) = articles_list_state.selected() {
                                     let num_articles =
                                         read_rss_db().expect("can fetch articles list").len();
