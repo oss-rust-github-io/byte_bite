@@ -65,11 +65,8 @@ impl PopupApp {
     }
 
     pub fn progress_msg(&mut self) {
-        self.message = String::from("RSS feed refresh is in progress... Please wait.");
-    }
-
-    pub fn complete_msg(&mut self) {
-        self.message = String::from("RSS feed refresh is complete. (Press Esc to go back)");
+        self.message =
+            String::from("RSS feed refresh has started in background. (Press Esc to go back)");
     }
 }
 
@@ -245,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if popup_app.show_popup {
                 popup_app.progress_msg();
-                let area = show_popup(60, 20, size);
+                let area = show_popup(50, 15, size);
 
                 let popup_text = Paragraph::new(popup_app.message.clone())
                     .style(Style::default().fg(Color::LightCyan))
@@ -271,16 +268,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 inputbox_app.input_mode = InputMode::Editing;
                             }
                             KeyCode::Char('r') => {
-                                inputbox_app.input_mode = InputMode::Popup;
-
                                 let selected = rss_list_state.selected().unwrap();
-                                let handle = tokio::spawn(async move {
-                                    popup_app.show_popup = true;
-                                    let _ = write_articles_db(selected).await.unwrap();
+                                thread::spawn(move || {
+                                    let rt = tokio::runtime::Builder::new_multi_thread()
+                                        .enable_all()
+                                        .build()
+                                        .unwrap();
+                                    rt.block_on(async {
+                                        let _ = write_articles_db(selected).await.unwrap();
+                                    });
                                 });
-
-                                handle.await.unwrap();
-                                popup_app.complete_msg();
+                                popup_app.show_popup = true;
+                                inputbox_app.input_mode = InputMode::Popup;
                             }
                             KeyCode::PageDown => {
                                 if let Some(selected) = rss_list_state.selected() {

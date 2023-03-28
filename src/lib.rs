@@ -74,7 +74,7 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
     let response = reqwest::get(selected_rss_feed.url).await?;
     let content = response.bytes().await?;
     let rss = Channel::read_from(&content[..])?;
-    let mut articles_list: Vec<Articles> = vec![];
+    let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
 
     for (article_id, item) in rss.items().iter().enumerate() {
         let title = match item.title() {
@@ -96,8 +96,8 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
         };
 
         articles_list.push(new_article);
-        fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
     }
+    fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
     Ok(())
 }
 

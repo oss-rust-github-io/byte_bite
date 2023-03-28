@@ -13,7 +13,6 @@ license = "GPL-3.0 license"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 crossterm = { version = "0.19", features = [ "serde" ] }
-futures = "0.3.27"
 reqwest = { version = "0.11", features = ["json","blocking"] }
 rss = "2.0.2"
 serde = { version = "1.0", features = ["derive"] }
