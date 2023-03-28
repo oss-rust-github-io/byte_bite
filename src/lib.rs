@@ -3,6 +3,8 @@ pub mod error_db;
 
 use chrono::prelude::{DateTime, Utc};
 use error_db::Error;
+use reqwest;
+use rss::Channel;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tui::{
@@ -11,28 +13,25 @@ use tui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
 };
 
-#[allow(dead_code)]
-const RSS_DB_PATH: &str = "data/rss_db.json";
-
-#[allow(dead_code)]
-const ARTICLE_DB_PATH: &str = "data/article_db.json";
+pub const RSS_DB_PATH: &str = "data/rss_db.json";
+pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RSSFeed {
-    rss_id: usize,
-    category: String,
-    name: String,
-    url: String,
-    created_at: DateTime<Utc>,
+    pub rss_id: usize,
+    pub category: String,
+    pub name: String,
+    pub url: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Articles {
-    article_id: usize,
-    rss_id: usize,
-    title: String,
-    summary: String,
-    created_at: DateTime<Utc>,
+    pub article_id: usize,
+    pub rss_id: usize,
+    pub title: String,
+    pub summary: String,
+    pub created_at: DateTime<Utc>,
 }
 
 pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
@@ -67,6 +66,39 @@ pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
     let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
     Ok(parsed)
+}
+
+pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::error::Error>> {
+    let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+    let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
+    let response = reqwest::get(selected_rss_feed.url).await?;
+    let content = response.bytes().await?;
+    let rss = Channel::read_from(&content[..])?;
+    let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
+
+    for (article_id, item) in rss.items().iter().enumerate() {
+        let title = match item.title() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let description = match item.description() {
+            Some(t) => t,
+            None => "",
+        };
+
+        let new_article = Articles {
+            article_id,
+            rss_id: selected_rss_feed.rss_id,
+            title: title.to_string(),
+            summary: description.to_string(),
+            created_at: Utc::now(),
+        };
+
+        articles_list.push(new_article);
+    }
+    fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
+    Ok(())
 }
 
 pub fn render_rss_feed_list<'a>(
