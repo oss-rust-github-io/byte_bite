@@ -25,7 +25,7 @@ pub struct RSSFeed {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct Articles {
     pub article_id: usize,
     pub rss_id: usize,
@@ -89,7 +89,27 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
     let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
     let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
     let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
-    let response = reqwest::get(selected_rss_feed.url).await?;
+
+    let max_timestamp = articles_list
+        .iter()
+        .max_by_key(|p| p.created_at)
+        .map(|p| p.created_at)
+        .expect("can fetch max timestamp");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(selected_rss_feed.url)
+        .header(
+            reqwest::header::IF_MODIFIED_SINCE,
+            max_timestamp.to_rfc2822(),
+        )
+        .send()
+        .await?;
+
+    if response.status() == 304 {
+        return Ok(());
+    }
+
     let content = response.bytes().await?;
     let rss = Channel::read_from(&content[..])?;
 
@@ -132,7 +152,11 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
             created_at: Utc::now(),
         };
 
-        articles_list.push(new_article);
+        if articles_list.contains(&new_article) {
+            continue;
+        } else {
+            articles_list.push(new_article);
+        }
     }
     fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
     Ok(())
