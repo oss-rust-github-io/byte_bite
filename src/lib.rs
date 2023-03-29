@@ -42,8 +42,8 @@ pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
     Ok(parsed)
 }
 
-pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
-    let split_parts = input_text.split(":").collect::<Vec<&str>>();
+pub async fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
+    let split_parts = input_text.split("|").collect::<Vec<&str>>();
     let mut parsed: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
     let max_id = parsed
         .iter()
@@ -61,6 +61,8 @@ pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
 
     parsed.push(new_entry);
     fs::write(RSS_DB_PATH, &serde_json::to_vec(&parsed)?)?;
+
+    let _ = write_articles_db(parsed.len() - 1).await.unwrap();
     Ok(parsed)
 }
 

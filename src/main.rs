@@ -211,7 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("Add new RSS feed (<RSS category> : <RSS Name> : <RSS Url>)"),
+                        .title("Add new RSS feed (<RSS category> | <RSS Name> | <RSS Url>). Press <Enter> to submit."),
                 );
             rect.render_widget(rss_url, chunks[3]);
 
@@ -483,7 +483,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Enter => {
                                 let input_text: String =
                                     inputbox_app.text_input.drain(..).collect::<String>();
-                                write_rss_db(input_text).expect("can add new rss feed");
+                                write_rss_db(input_text).await?;
                             }
                             KeyCode::Char(c) => {
                                 inputbox_app.text_input.push(c);
