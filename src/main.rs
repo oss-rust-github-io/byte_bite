@@ -4,7 +4,7 @@ pub mod error_db;
 
 use byte_bite::{
     read_articles_db, read_rss_db, render_rss_feed_list, update_rss_db, write_articles_db,
-    write_rss_db,
+    write_rss_db, Articles,
 };
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
@@ -269,21 +269,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 inputbox_app.input_mode = InputMode::Editing;
                             }
                             KeyCode::Char('d') => {
-                                update_rss_db(&mut rss_list_state).expect("can remove RSS feed");
+                                let selected = rss_list_state.selected().unwrap();
+                                if selected > 0 {
+                                    update_rss_db(&mut rss_list_state)
+                                        .expect("can remove RSS feed");
+                                }
                             }
                             KeyCode::Char('r') => {
                                 let selected = rss_list_state.selected().unwrap();
-                                thread::spawn(move || {
-                                    let rt = tokio::runtime::Builder::new_multi_thread()
-                                        .enable_all()
-                                        .build()
-                                        .unwrap();
-                                    rt.block_on(async {
-                                        let _ = write_articles_db(selected).await.unwrap();
+                                if selected > 0 {
+                                    thread::spawn(move || {
+                                        let rt = tokio::runtime::Builder::new_multi_thread()
+                                            .enable_all()
+                                            .build()
+                                            .unwrap();
+                                        rt.block_on(async {
+                                            let _ = write_articles_db(selected).await.unwrap();
+                                        });
                                     });
-                                });
-                                popup_app.show_popup = true;
-                                inputbox_app.input_mode = InputMode::Popup;
+                                    popup_app.show_popup = true;
+                                    inputbox_app.input_mode = InputMode::Popup;
+                                }
                             }
                             KeyCode::PageDown => {
                                 if let Some(selected) = rss_list_state.selected() {
@@ -295,6 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         rss_list_state.select(Some(selected + 1));
                                     }
                                 }
+                                articles_list_state.select(Some(0));
                             }
                             KeyCode::PageUp => {
                                 if let Some(selected) = rss_list_state.selected() {
@@ -306,11 +313,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         rss_list_state.select(Some(num_rss_feeds - 1));
                                     }
                                 }
+                                articles_list_state.select(Some(0));
                             }
                             KeyCode::Down => {
+                                let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+                                let selected_rss_feed = rss_feed_list
+                                    .get(rss_list_state.selected().unwrap())
+                                    .expect("exists")
+                                    .clone();
+                                let rss_articles_list: Vec<Articles> = read_articles_db()
+                                    .expect("can fetch RSS articles list")
+                                    .into_iter()
+                                    .filter(|r| r.rss_id == selected_rss_feed.rss_id)
+                                    .collect();
+
                                 if let Some(selected) = articles_list_state.selected() {
-                                    let num_articles =
-                                        read_articles_db().expect("can fetch articles list").len();
+                                    let num_articles = rss_articles_list.len();
                                     if selected >= num_articles - 1 {
                                         articles_list_state.select(Some(0));
                                     } else {
@@ -319,9 +337,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                             KeyCode::Up => {
+                                let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+                                let selected_rss_feed = rss_feed_list
+                                    .get(rss_list_state.selected().unwrap())
+                                    .expect("exists")
+                                    .clone();
+                                let rss_articles_list: Vec<Articles> = read_articles_db()
+                                    .expect("can fetch RSS articles list")
+                                    .into_iter()
+                                    .filter(|r| r.rss_id == selected_rss_feed.rss_id)
+                                    .collect();
+
                                 if let Some(selected) = articles_list_state.selected() {
-                                    let num_articles =
-                                        read_rss_db().expect("can fetch articles list").len();
+                                    let num_articles = rss_articles_list.len();
                                     if selected > 0 {
                                         articles_list_state.select(Some(selected - 1));
                                     } else {

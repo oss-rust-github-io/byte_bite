@@ -93,7 +93,15 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
     let content = response.bytes().await?;
     let rss = Channel::read_from(&content[..])?;
 
-    for (article_id, item) in rss.items().iter().enumerate() {
+    let mut article_id = articles_list
+        .iter()
+        .max_by_key(|p| p.article_id)
+        .map(|p| p.article_id)
+        .expect("can fetch rss article id");
+
+    for item in rss.items().iter() {
+        article_id += 1;
+
         let title = match item.title() {
             Some(t) => t,
             None => "",
