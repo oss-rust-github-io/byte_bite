@@ -53,21 +53,16 @@ impl InputBoxApp {
 }
 
 pub struct PopupApp {
-    pub show_popup: bool,
-    pub message: String,
+    pub show_refresh_popup: bool,
+    pub show_help_popup: bool,
 }
 
 impl PopupApp {
     pub fn new() -> PopupApp {
         PopupApp {
-            show_popup: false,
-            message: String::from(""),
+            show_refresh_popup: false,
+            show_help_popup: false,
         }
-    }
-
-    pub fn progress_msg(&mut self) {
-        self.message =
-            String::from("RSS feed refresh has started in background. (Press Esc to go back)");
     }
 }
 
@@ -241,22 +236,137 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             rect.render_widget(license, chunks[4]);
 
-            if popup_app.show_popup {
-                popup_app.progress_msg();
+            if popup_app.show_refresh_popup {
                 let area = show_popup(50, 15, size);
 
-                let popup_text = Paragraph::new(popup_app.message.clone())
-                    .style(Style::default().fg(Color::LightCyan))
-                    .alignment(Alignment::Center)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .style(Style::default().fg(Color::White))
-                            .border_type(BorderType::Plain),
-                    );
+                let popup_text = Paragraph::new(
+                    "RSS feed refresh has started in background. (Press Esc to go back)",
+                )
+                .style(Style::default().fg(Color::LightCyan))
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::White))
+                        .border_type(BorderType::Plain),
+                );
 
                 rect.render_widget(Clear, area);
                 rect.render_widget(popup_text, area);
+            }
+
+            if popup_app.show_help_popup {
+                let area = show_popup(60, 40, size);
+
+                let rss_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(
+                    [
+                        Constraint::Percentage(35),
+                        Constraint::Percentage(65),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+
+                let popup_title_text = Paragraph::new(vec![
+                    Spans::from(vec![Span::raw("")]),
+                    Spans::from(vec![Span::styled(
+                        "Welcome to Byte-Bite",
+                        Style::default()
+                            .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD),
+                    )]),
+                    Spans::from(vec![Span::raw("")]),
+                    Spans::from(vec![Span::styled(
+                        "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential  news in a pocket-size format.",
+                        Style::default().fg(Color::LightBlue),
+                    )]),
+                    Spans::from(vec![Span::raw("")]),
+                ])
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::White))
+                        .border_type(BorderType::Plain),
+                );
+
+                let popup_help_text = Paragraph::new(vec![
+                    Spans::from(vec![Span::raw("")]),
+                    Spans::from(vec![Span::styled(
+                        "       Keyboard Navigation Help",
+                        Style::default().fg(Color::Yellow),
+                    )]),
+                    Spans::from(vec![Span::raw("")]),
+                    Spans::from(vec![Span::styled(
+                        "       a                     ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Add new RSS feed url",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       d                     ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Delete existing RSS feed",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       r                     ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Refresh articles for RSS feed",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       page-up / page-down   ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Navigate through list of RSS feeds",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       arrow-up / arrow-down ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Navigate through list of articles in each RSS feed",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       esc                   ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Exit RSS add option / Exit popup windows",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       h                     ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Open help menu",
+                        Style::default().fg(Color::White),
+                    )]),
+                    Spans::from(vec![Span::styled(
+                        "       q                     ",
+                        Style::default().fg(Color::LightGreen),
+                    ), Span::styled(
+                        " --> Exit the application",
+                        Style::default().fg(Color::White),
+                    )]),
+                ])
+                .alignment(Alignment::Left)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::White))
+                        .border_type(BorderType::Plain),
+                );
+
+                rect.render_widget(Clear, area);
+                rect.render_widget(popup_title_text, rss_chunks[0]);
+                rect.render_widget(popup_help_text, rss_chunks[1]);
             }
         })?;
 
@@ -287,9 +397,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             let _ = write_articles_db(selected).await.unwrap();
                                         });
                                     });
-                                    popup_app.show_popup = true;
+                                    popup_app.show_refresh_popup = true;
                                     inputbox_app.input_mode = InputMode::Popup;
                                 }
+                            }
+                            KeyCode::Char('h') => {
+                                popup_app.show_help_popup = true;
+                                inputbox_app.input_mode = InputMode::Popup;
                             }
                             KeyCode::PageDown => {
                                 if let Some(selected) = rss_list_state.selected() {
@@ -384,7 +498,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         InputMode::Popup => match key.code {
                             KeyCode::Esc => {
-                                popup_app.show_popup = false;
+                                popup_app.show_refresh_popup = false;
+                                popup_app.show_help_popup = false;
                                 inputbox_app.input_mode = InputMode::Normal;
                             }
                             _ => {}
