@@ -25,7 +25,7 @@ pub struct RSSFeed {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(PartialEq, Serialize, Deserialize, Clone)]
 pub struct Articles {
     pub article_id: usize,
     pub rss_id: usize,
@@ -42,8 +42,8 @@ pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
     Ok(parsed)
 }
 
-pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
-    let split_parts = input_text.split(":").collect::<Vec<&str>>();
+pub async fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
+    let split_parts = input_text.split("|").collect::<Vec<&str>>();
     let mut parsed: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
     let max_id = parsed
         .iter()
@@ -61,7 +61,24 @@ pub fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
 
     parsed.push(new_entry);
     fs::write(RSS_DB_PATH, &serde_json::to_vec(&parsed)?)?;
+
+    let _ = write_articles_db(parsed.len() - 1).await.unwrap();
     Ok(parsed)
+}
+
+pub fn update_rss_db(rss_list_state: &mut ListState) -> Result<(), Error> {
+    if let Some(selected) = rss_list_state.selected() {
+        let mut rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+        rss_feed_list.remove(selected);
+        fs::write(RSS_DB_PATH, &serde_json::to_vec(&rss_feed_list)?)?;
+
+        if selected > 0 {
+            rss_list_state.select(Some(selected - 1));
+        } else {
+            rss_list_state.select(Some(0));
+        }
+    }
+    Ok(())
 }
 
 pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
@@ -74,11 +91,39 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
     let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
     let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
     let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
-    let response = reqwest::get(selected_rss_feed.url).await?;
+
+    let max_timestamp = articles_list
+        .iter()
+        .max_by_key(|p| p.created_at)
+        .map(|p| p.created_at)
+        .expect("can fetch max timestamp");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(selected_rss_feed.url)
+        .header(
+            reqwest::header::IF_MODIFIED_SINCE,
+            max_timestamp.to_rfc2822(),
+        )
+        .send()
+        .await?;
+
+    if response.status() == 304 {
+        return Ok(());
+    }
+
     let content = response.bytes().await?;
     let rss = Channel::read_from(&content[..])?;
 
-    for (article_id, item) in rss.items().iter().enumerate() {
+    let mut article_id = articles_list
+        .iter()
+        .max_by_key(|p| p.article_id)
+        .map(|p| p.article_id)
+        .expect("can fetch rss article id");
+
+    for item in rss.items().iter() {
+        article_id += 1;
+
         let title = match item.title() {
             Some(t) => t,
             None => "",
@@ -109,7 +154,11 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
             created_at: Utc::now(),
         };
 
-        articles_list.push(new_article);
+        if articles_list.contains(&new_article) {
+            continue;
+        } else {
+            articles_list.push(new_article);
+        }
     }
     fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
     Ok(())
