@@ -2,7 +2,8 @@ extern crate chrono;
 pub mod error_db;
 
 use chrono::prelude::{DateTime, Utc};
-use error_db::Error;
+use error_db::{ErrorCodes, ErrorMessages};
+use log::{debug, error, info};
 use reqwest;
 use rss::Channel;
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use tui::{
 pub const RSS_DB_PATH: &str = "data/rss_db.json";
 pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RSSFeed {
     pub rss_id: usize,
     pub category: String,
@@ -36,20 +37,33 @@ pub struct Articles {
     pub created_at: DateTime<Utc>,
 }
 
-pub fn read_rss_db() -> Result<Vec<RSSFeed>, Error> {
-    let db_content = fs::read_to_string(RSS_DB_PATH)?;
-    let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content)?;
-    Ok(parsed)
+pub fn read_rss_db() -> Vec<RSSFeed> {
+    let db_content = fs::read_to_string(RSS_DB_PATH).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+    let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+    debug!("Data read successfully from RSS database.");
+    parsed
 }
 
-pub async fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
+pub async fn write_rss_db(input_text: String) {
     let split_parts = input_text.split("|").collect::<Vec<&str>>();
-    let mut parsed: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+    let mut parsed: Vec<RSSFeed> = read_rss_db();
     let max_id = parsed
         .iter()
         .max_by_key(|p| p.rss_id)
         .map(|p| p.rss_id)
-        .expect("can fetch rss feed id");
+        .unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0017_RSS_MAX_ID_FETCH_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
 
     let new_entry = RSSFeed {
         rss_id: max_id + 1,
@@ -60,17 +74,40 @@ pub async fn write_rss_db(input_text: String) -> Result<Vec<RSSFeed>, Error> {
     };
 
     parsed.push(new_entry);
-    fs::write(RSS_DB_PATH, &serde_json::to_vec(&parsed)?)?;
 
-    let _ = write_articles_db(parsed.len() - 1).await.unwrap();
-    Ok(parsed)
+    let parsed: &Vec<u8> = &serde_json::to_vec(&parsed).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+
+    fs::write(RSS_DB_PATH, parsed).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+
+    let _ = write_articles_db(parsed.len() - 1).await;
 }
 
-pub fn update_rss_db(rss_list_state: &mut ListState) -> Result<(), Error> {
+pub fn update_rss_db(rss_list_state: &mut ListState) {
     if let Some(selected) = rss_list_state.selected() {
-        let mut rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
+        let mut rss_feed_list: Vec<RSSFeed> = read_rss_db();
         rss_feed_list.remove(selected);
-        fs::write(RSS_DB_PATH, &serde_json::to_vec(&rss_feed_list)?)?;
+
+        let parsed: &Vec<u8> = &serde_json::to_vec(&rss_feed_list).unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
+
+        fs::write(RSS_DB_PATH, parsed).unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
+
+        debug!("Data updated successfully in RSS database.");
 
         if selected > 0 {
             rss_list_state.select(Some(selected - 1));
@@ -78,25 +115,46 @@ pub fn update_rss_db(rss_list_state: &mut ListState) -> Result<(), Error> {
             rss_list_state.select(Some(0));
         }
     }
-    Ok(())
 }
 
-pub fn read_articles_db() -> Result<Vec<Articles>, Error> {
-    let db_content = fs::read_to_string(ARTICLE_DB_PATH)?;
-    let parsed: Vec<Articles> = serde_json::from_str(&db_content)?;
-    Ok(parsed)
+pub fn read_articles_db() -> Vec<Articles> {
+    let db_content = fs::read_to_string(ARTICLE_DB_PATH).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+
+    let parsed: Vec<Articles> = serde_json::from_str(&db_content).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
+    debug!("Data read successfully from Articles database.");
+    parsed
 }
 
-pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let mut articles_list: Vec<Articles> = read_articles_db().expect("can fetch RSS feed list");
-    let rss_feed_list: Vec<RSSFeed> = read_rss_db().expect("can fetch RSS feed list");
-    let selected_rss_feed = rss_feed_list.get(rss_selected).expect("exists").clone();
+pub async fn write_articles_db(rss_selected: usize) {
+    let mut articles_list: Vec<Articles> = read_articles_db();
+    let rss_feed_list: Vec<RSSFeed> = read_rss_db();
+
+    let selected_rss_feed = rss_feed_list
+        .get(rss_selected)
+        .unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        })
+        .clone();
+
+    info!("Selected RSS Feed: {:?}", selected_rss_feed);
 
     let max_timestamp = articles_list
         .iter()
         .max_by_key(|p| p.created_at)
         .map(|p| p.created_at)
         .expect("can fetch max timestamp");
+
+    info!("Max timestamp: {}", max_timestamp);
 
     let client = reqwest::Client::new();
     let response = client
@@ -106,69 +164,101 @@ pub async fn write_articles_db(rss_selected: usize) -> Result<(), Box<dyn std::e
             max_timestamp.to_rfc2822(),
         )
         .send()
-        .await?;
+        .await
+        .unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0010_HTTP_REQUEST_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
 
-    if response.status() == 304 {
-        return Ok(());
-    }
+    info!("Response status code: {}", response.status());
 
-    let content = response.bytes().await?;
-    let rss = Channel::read_from(&content[..])?;
+    if response.status() != 304 {
+        let content = response.bytes().await.unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0011_HTTP_RESPONSE_PARSE_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
 
-    let mut article_id = articles_list
-        .iter()
-        .max_by_key(|p| p.article_id)
-        .map(|p| p.article_id)
-        .expect("can fetch rss article id");
+        let rss = Channel::read_from(&content[..]).unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0012_RSS_CHANNEL_PARSE_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
 
-    for item in rss.items().iter() {
-        article_id += 1;
+        let mut article_id = articles_list
+            .iter()
+            .max_by_key(|p| p.article_id)
+            .map(|p| p.article_id)
+            .unwrap_or_else(|| {
+                let err_msg = ErrorMessages::new(ErrorCodes::E0013_ARTICLES_LIST_READ_FAILURE);
+                error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+                panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            });
 
-        let title = match item.title() {
-            Some(t) => t,
-            None => "",
-        };
+        for item in rss.items().iter() {
+            article_id += 1;
 
-        let summary = match item.description() {
-            Some(t) => t,
-            None => "",
-        };
+            let title = match item.title() {
+                Some(t) => t,
+                None => "",
+            };
 
-        let article_link = match item.link() {
-            Some(t) => t,
-            None => "",
-        };
+            let summary = match item.description() {
+                Some(t) => t,
+                None => "",
+            };
 
-        let pub_date = match item.pub_date() {
-            Some(t) => t,
-            None => "",
-        };
+            let article_link = match item.link() {
+                Some(t) => t,
+                None => "",
+            };
 
-        let new_article = Articles {
-            article_id,
-            rss_id: selected_rss_feed.rss_id,
-            title: title.to_string(),
-            summary: summary.to_string(),
-            article_link: article_link.to_string(),
-            pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap()),
-            created_at: Utc::now(),
-        };
+            let pub_date = match item.pub_date() {
+                Some(t) => t,
+                None => "",
+            };
 
-        if articles_list.contains(&new_article) {
-            continue;
-        } else {
-            articles_list.push(new_article);
+            let new_article = Articles {
+                article_id,
+                rss_id: selected_rss_feed.rss_id,
+                title: title.to_string(),
+                summary: summary.to_string(),
+                article_link: article_link.to_string(),
+                pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap()),
+                created_at: Utc::now(),
+            };
+
+            if articles_list.contains(&new_article) {
+                continue;
+            } else {
+                articles_list.push(new_article);
+            }
         }
+
+        let parsed: &Vec<u8> = &serde_json::to_vec(&articles_list).unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
+
+        fs::write(ARTICLE_DB_PATH, parsed).unwrap_or_else(|_err| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
+
+        debug!("Data written successfully in Articles database.");
+    } else {
+        debug!("No new data to write to Articles database.");
     }
-    fs::write(ARTICLE_DB_PATH, &serde_json::to_vec(&articles_list)?)?;
-    Ok(())
 }
 
 pub fn render_rss_feed_list<'a>(
     rss_list_state: &ListState,
     article_list_state: &ListState,
 ) -> (List<'a>, List<'a>, Paragraph<'a>) {
-    let rss_feed_list = read_rss_db().expect("can fetch RSS feed list");
+    let rss_feed_list = read_rss_db();
 
     let rss_feeds = Block::default()
         .borders(Borders::ALL)
@@ -203,7 +293,6 @@ pub fn render_rss_feed_list<'a>(
         .clone();
 
     let mut rss_articles_list: Vec<Articles> = read_articles_db()
-        .expect("can fetch RSS articles list")
         .into_iter()
         .filter(|r| r.rss_id == selected_rss_feed.rss_id)
         .collect();
