@@ -6,7 +6,7 @@ edition = "2021"
 description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format."
 readme = "README.md"
 repository = "https://github.com/oss-rust-github-io/ByteBite"
-license = "GPL-3.0 license"
+license = "GPL-3.0-only"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
