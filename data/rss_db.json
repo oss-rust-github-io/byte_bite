@@ -5,26 +5,5 @@
         "name": "Welcome",
         "url": "https://github.com/oss-rust-github-io/byte_bite",
         "created_at": "2023-03-23T12:00:00Z"
-    },
-    {
-        "rss_id": 1,
-        "category": "News",
-        "name": "Hindustan Times",
-        "url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
-        "created_at": "2023-03-23T12:00:00Z"
-    },
-    {
-        "rss_id": 2,
-        "category": "News",
-        "name": "Times of India",
-        "url": "http://timesofindia.indiatimes.com/rssfeedstopstories.cms",
-        "created_at": "2023-03-24T15:52:14.076614900Z"
-    },
-    {
-        "rss_id": 3,
-        "category": "Data Engineering",
-        "name": "LinkedIn DE Blog",
-        "url": "https://engineering.linkedin.com/blog.rss.html/feed",
-        "created_at": "2023-03-29T13:40:38.066125900Z"
     }
 ]
