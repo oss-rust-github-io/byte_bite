@@ -27,16 +27,24 @@ use unicode_width::UnicodeWidthStr;
 
 const APP_HEADING: &str = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
 const MENU_TITLES: [&'static str; 5] = ["Add", "Delete", "Refresh", "Help", "Quit"];
+const LOGGING_CONFIG: &str = "logging_config.yaml";
 
-enum InputMode {
+/// Defines the different TUI modes for user interaction
+pub enum InputMode {
+    /// Normal navigation mode to traverse RSS feeds and articles
     Normal,
+    /// Editing mode to add new RSS feeds
     Editing,
+    /// Popup mode to display information in TUI Popups
     Popup,
 }
 
+/// Defines the metadata for text input box in TUI
 struct InputBoxApp {
-    text_input: String,
-    input_mode: InputMode,
+    /// Stores text input from users
+    pub text_input: String,
+    /// Different input modes as per "InputMode" enum
+    pub input_mode: InputMode,
 }
 
 impl InputBoxApp {
@@ -48,13 +56,16 @@ impl InputBoxApp {
     }
 }
 
+/// Defines the flags for displaying popups
 pub struct PopupApp {
+    /// Flag for showing/hiding articles refresh popup
     pub show_refresh_popup: bool,
+    /// Flag for showing/hiding help navigation popup
     pub show_help_popup: bool,
 }
 
 impl PopupApp {
-    pub fn new() -> PopupApp {
+    fn new() -> PopupApp {
         PopupApp {
             show_refresh_popup: false,
             show_help_popup: false,
@@ -90,7 +101,11 @@ fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    log4rs::init_file("logging_config.yaml", Default::default()).unwrap();
+    log4rs::init_file(LOGGING_CONFIG, Default::default()).unwrap_or_else(|_err| {
+        let err_msg = ErrorMessages::new(ErrorCodes::E0019_LOGGING_CONFIG_FILE_READ_FAILURE);
+        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+    });
 
     enable_raw_mode().unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0001_ENABLE_RAW_MODE_FAILURE);
@@ -404,7 +419,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let rt = tokio::runtime::Builder::new_multi_thread()
                                     .enable_all()
                                     .build()
-                                    .unwrap();
+                                    .unwrap_or_else(|_err| {
+                                        let err_msg = ErrorMessages::new(
+                                            ErrorCodes::E0018_TOKIO_RUNTIME_BUILDER_FAILURE,
+                                        );
+                                        error!(
+                                            "{:?} - {}",
+                                            err_msg.error_code, err_msg.error_message
+                                        );
+                                        panic!(
+                                            "{:?} - {}",
+                                            err_msg.error_code, err_msg.error_message
+                                        );
+                                    });
                                 rt.block_on(async {
                                     let _ = write_articles_db(selected).await;
                                 });

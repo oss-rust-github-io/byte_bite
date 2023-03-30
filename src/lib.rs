@@ -1,3 +1,17 @@
+//! ## Byte-Bite
+//! Terminal centric RSS feed reader (powered by Rust) that delivers all the essential news in a pocket-size format
+//!
+//! ## Key Features:
+//! - Enables users to add/remove RSS feeds
+//! - Incremental refresh for RSS articles
+//! - Help menu provided to help users with keyboard navigation
+//!
+//! ## Getting Started:
+//! Visit the [Byte-Bite official repository](https://github.com/oss-rust-github-io/byte_bite) to download and install the application on the host machine.
+//!
+//! ## License
+//! GPL-3.0 license. See [LICENSE](LICENSE) file.
+
 extern crate chrono;
 pub mod error_db;
 
@@ -14,29 +28,45 @@ use tui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
+/// JSON file path for RSS feed data
 pub const RSS_DB_PATH: &str = "data/rss_db.json";
+
+/// JSON file path for RSS articles data
 pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+/// Defines the metadata for storing RSS feed information
 pub struct RSSFeed {
+    /// Unique identifier for each RSS feed
     pub rss_id: usize,
+    /// RSS feed category (news, sports, technology, etc.)
     pub category: String,
+    /// RSS feed name
     pub name: String,
+    /// RSS feed URL
     pub url: String,
-    pub created_at: DateTime<Utc>,
+    created_at: DateTime<Utc>,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
+/// Defines the metadata for storing RSS articles information
 pub struct Articles {
+    /// Unique identifier for each Article
     pub article_id: usize,
+    /// Unique identifier for each RSS feed
     pub rss_id: usize,
+    /// Article title
     pub title: String,
+    /// Article summary
     pub summary: String,
+    /// URL to navigate to original article
     pub article_link: String,
+    /// Article publishing date
     pub pub_date: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
+    created_at: DateTime<Utc>,
 }
 
+/// Reads the RSS feed information from JSON files
 pub fn read_rss_db() -> Vec<RSSFeed> {
     let db_content = fs::read_to_string(RSS_DB_PATH).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
@@ -52,6 +82,7 @@ pub fn read_rss_db() -> Vec<RSSFeed> {
     parsed
 }
 
+/// Stores the RSS feed information into JSON files
 pub async fn write_rss_db(input_text: String) {
     let split_parts = input_text.split("|").collect::<Vec<&str>>();
     let mut parsed: Vec<RSSFeed> = read_rss_db();
@@ -90,6 +121,7 @@ pub async fn write_rss_db(input_text: String) {
     let _ = write_articles_db(parsed.len() - 1).await;
 }
 
+/// Delete given RSS feed data from JSON files
 pub fn update_rss_db(rss_list_state: &mut ListState) {
     if let Some(selected) = rss_list_state.selected() {
         let mut rss_feed_list: Vec<RSSFeed> = read_rss_db();
@@ -117,6 +149,7 @@ pub fn update_rss_db(rss_list_state: &mut ListState) {
     }
 }
 
+/// Reads the RSS articles information from JSON files
 pub fn read_articles_db() -> Vec<Articles> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
@@ -133,6 +166,7 @@ pub fn read_articles_db() -> Vec<Articles> {
     parsed
 }
 
+/// Stores the RSS articles information into JSON files
 pub async fn write_articles_db(rss_selected: usize) {
     let mut articles_list: Vec<Articles> = read_articles_db();
     let rss_feed_list: Vec<RSSFeed> = read_rss_db();
@@ -225,7 +259,14 @@ pub async fn write_articles_db(rss_selected: usize) {
                 title: title.to_string(),
                 summary: summary.to_string(),
                 article_link: article_link.to_string(),
-                pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap()),
+                pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap_or_else(
+                    |_err| {
+                        let err_msg =
+                            ErrorMessages::new(ErrorCodes::E0020_RFC2822_TIMESTAMP_PARSE_FAILURE);
+                        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+                        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+                    },
+                )),
                 created_at: Utc::now(),
             };
 
@@ -254,6 +295,7 @@ pub async fn write_articles_db(rss_selected: usize) {
     }
 }
 
+/// Renders the list of RSS feeds and articles, and articles summary in TUI
 pub fn render_rss_feed_list<'a>(
     rss_list_state: &ListState,
     article_list_state: &ListState,
