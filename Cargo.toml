@@ -1,11 +1,11 @@
 [package]
 name = "byte_bite"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Tapas Das", "dlaststark@gmail.com"]
 edition = "2021"
 description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format."
 readme = "README.md"
-repository = "https://github.com/oss-rust-github-io/ByteBite"
+repository = "https://github.com/oss-rust-github-io/byte_bite"
 license = "GPL-3.0-only"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
