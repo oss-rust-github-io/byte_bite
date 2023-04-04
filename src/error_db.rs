@@ -44,6 +44,8 @@ pub enum ErrorCodes {
     E0019_LOGGING_CONFIG_FILE_READ_FAILURE,
     /// Unable to parse provided timestamp into RFC2822 format
     E0020_RFC2822_TIMESTAMP_PARSE_FAILURE,
+    /// Unable to fetch max timestamp from Articles database
+    E0021_ARTICLE_MAX_TIMESTAMP_FETCH_FAILURE,
 }
 
 #[derive(Debug)]
@@ -119,6 +121,9 @@ impl ErrorMessages {
             }
             ErrorCodes::E0020_RFC2822_TIMESTAMP_PARSE_FAILURE => {
                 String::from("Unable to parse provided timestamp into RFC2822 format.")
+            }
+            ErrorCodes::E0021_ARTICLE_MAX_TIMESTAMP_FETCH_FAILURE => {
+                String::from("Unable to fetch max timestamp from Articles database.")
             }
         };
         ErrorMessages {

@@ -187,7 +187,11 @@ pub async fn write_articles_db(rss_selected: usize) {
         .iter()
         .max_by_key(|p| p.created_at)
         .map(|p| p.created_at)
-        .expect("can fetch max timestamp");
+        .unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0021_ARTICLE_MAX_TIMESTAMP_FETCH_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        });
 
     info!("Max timestamp: {}", max_timestamp);
 
@@ -271,7 +275,7 @@ pub async fn write_articles_db(rss_selected: usize) {
                 created_at: Utc::now(),
             };
 
-            if articles_list.contains(&new_article) {
+            if check_if_article_exists(&article_link, &articles_list) {
                 continue;
             } else {
                 articles_list.push(new_article);
@@ -327,12 +331,16 @@ pub fn render_rss_feed_list<'a>(
     );
 
     let selected_rss_feed = rss_feed_list
-        .get(
-            rss_list_state
-                .selected()
-                .expect("there is always a selected RSS feed"),
-        )
-        .expect("exists")
+        .get(rss_list_state.selected().unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        }))
+        .unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0014_RSS_LIST_READ_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        })
         .clone();
 
     let mut rss_articles_list: Vec<Articles> = read_articles_db()
@@ -366,12 +374,16 @@ pub fn render_rss_feed_list<'a>(
     );
 
     let selected_article = rss_articles_list
-        .get(
-            article_list_state
-                .selected()
-                .expect("there is always a selected article"),
-        )
-        .expect("exists")
+        .get(article_list_state.selected().unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        }))
+        .unwrap_or_else(|| {
+            let err_msg = ErrorMessages::new(ErrorCodes::E0013_ARTICLES_LIST_READ_FAILURE);
+            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+            panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
+        })
         .clone();
 
     let article_summary = Paragraph::new(vec![
@@ -406,4 +418,13 @@ pub fn render_rss_feed_list<'a>(
     .wrap(Wrap { trim: true });
 
     (rss_list, article_list, article_summary)
+}
+
+fn check_if_article_exists(article_url: &str, article_db: &Vec<Articles>) -> bool {
+    for item in article_db {
+        if item.article_link == article_url.to_string() {
+            return false;
+        }
+    }
+    true
 }

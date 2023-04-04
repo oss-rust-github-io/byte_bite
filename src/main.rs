@@ -11,7 +11,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use error_db::{ErrorCodes, ErrorMessages};
-use log::{debug, error, info};
+use log::{debug, error};
 use log4rs;
 use std::io;
 use std::thread;
@@ -125,7 +125,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
-    info!("New crossterm terminal created.");
 
     let mut rss_list_state = ListState::default();
     rss_list_state.select(Some(0));
@@ -162,7 +161,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             rect.render_widget(heading, chunks[0]);
-            info!("Application heading rendered in TUI Paragraph.");
 
             let menu = MENU_TITLES
                 .iter()
@@ -187,7 +185,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .divider(Span::raw(" | "));
 
             rect.render_widget(menu_titles, chunks[1]);
-            info!("Application menu titles rendered in TUI Tabs.");
 
             let rss_chunks = Layout::default()
                 .direction(Direction::Horizontal)
@@ -218,7 +215,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .title("Add new RSS feed (<RSS category> | <RSS Name> | <RSS Url>). Press <Enter> to submit."),
                 );
             rect.render_widget(rss_url, chunks[3]);
-            info!("RSS feed names, articles list and summary rendered in TUI Layout.");
 
             match inputbox_app.input_mode {
                 InputMode::Normal => {}
@@ -240,7 +236,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
             rect.render_widget(license, chunks[4]);
-            info!("Application license information rendered in TUI Paragraph.");
 
             if popup_app.show_refresh_popup {
                 let area = show_popup(50, 15, size);
@@ -259,7 +254,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 rect.render_widget(Clear, area);
                 rect.render_widget(popup_text, area);
-                info!("RSS data refresh popup rendered in TUI Popup.");
             }
 
             if popup_app.show_help_popup {
@@ -374,7 +368,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rect.render_widget(Clear, area);
                 rect.render_widget(popup_title_text, rss_chunks[0]);
                 rect.render_widget(popup_help_text, rss_chunks[1]);
-                info!("Application help menu for keyboard navigation rendered in TUI Popup.");
             }
         }).unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0004_APP_RENDERING_FAILURE);
