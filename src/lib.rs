@@ -9,8 +9,6 @@
 //! ## Getting Started:
 //! Visit the [Byte-Bite official repository](https://github.com/oss-rust-github-io/byte_bite) to download and install the application on the host machine.
 //!
-//! ## License
-//! GPL-3.0 license. See [LICENSE](LICENSE) file.
 
 extern crate chrono;
 pub mod error_db;
