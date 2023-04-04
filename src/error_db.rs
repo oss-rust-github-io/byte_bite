@@ -1,3 +1,6 @@
+//! Defines the error codes, used in the application, and their corresponding descriptions
+//!
+
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 /// Defines the list of error codes used in the application
