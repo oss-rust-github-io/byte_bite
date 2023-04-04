@@ -1,3 +1,11 @@
+# Byte-Bite
+
+![](https://img.shields.io/badge/license-GPL%203.0-green)
+![](https://img.shields.io/badge/Powered%20By-Rust-blue)
+![](https://img.shields.io/badge/Crates.io-0.1.1-blue)
+
+Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format.
+
 <p align="center">
 <img
   src="/logos/jpg/logo-black.jpg"
@@ -6,8 +14,8 @@
   height="25%">
 </p>
 
-# ByteBite
-Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format.
+https://user-images.githubusercontent.com/62032096/228919017-3f582f1b-da9e-449a-a732-f0f1d3b81a97.mp4
+
 
 # Key Features:
 - Enables users to add/remove RSS feeds
@@ -34,4 +42,4 @@ Visit the [Byte-Bite official repository](https://github.com/oss-rust-github-io/
 - esc --> Exit RSS add option / Exit popup windows
 
 # Roadmap
-The goal is to eventually package the application for all operating systems.
+The goal is to eventually evolve and package the application for all operating systems.
