@@ -2,7 +2,7 @@
 
 ![](https://img.shields.io/badge/license-GPL%203.0-green)
 ![](https://img.shields.io/badge/Powered%20By-Rust-blue)
-![](https://img.shields.io/badge/Crates.io-0.1.2-blue)
+![](https://img.shields.io/badge/Crates.io-0.1.3-blue)
 
 Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format.
 
