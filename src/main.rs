@@ -7,8 +7,9 @@ use byte_bite::{
     write_rss_db, Articles,
 };
 use crossterm::{
-    event::{self, Event as CEvent, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use error_db::{ErrorCodes, ErrorMessages};
 use log::{debug, error};
@@ -115,7 +116,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut popup_app = PopupApp::new();
     let mut inputbox_app = InputBoxApp::new();
-    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout())).unwrap_or_else(|_err| {
+
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0002_NEW_CROSSTERM_TERMINAL_FAILURE);
         error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
@@ -538,6 +542,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
+
+                        execute!(
+                            terminal.backend_mut(),
+                            LeaveAlternateScreen,
+                            DisableMouseCapture
+                        )?;
 
                         terminal.clear().unwrap_or_else(|_err| {
                             let err_msg =
