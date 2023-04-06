@@ -62,7 +62,7 @@ checksum = "0d261e256854913907f67ed06efbc3338dfe6179796deefc1ff763fc1aee5535"
 
 [[package]]
 name = "byte_bite"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "crossterm 0.19.0",
