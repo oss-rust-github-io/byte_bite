@@ -1,0 +1,29 @@
+name: Rust Crate Publish
+
+on:
+  push:
+    branches: [ main ]
+    tags: 
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Rust Crate Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@main
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Cargo test
+        run: cargo test --verbose
+      - name: Cargo publish
+        run: cargo publish --token ${CRATES_IO_TOKEN} --allow-dirty
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
