@@ -59,6 +59,8 @@ pub struct Articles {
     pub summary: String,
     /// URL to navigate to original article
     pub article_link: String,
+    /// Author of the article
+    pub author: String,
     /// Article publishing date
     pub pub_date: DateTime<Utc>,
     created_at: DateTime<Utc>,
@@ -237,6 +239,11 @@ pub async fn write_articles_db(rss_selected: usize) {
             None => "",
         };
 
+        let author = match item.author() {
+            Some(t) => t,
+            None => "",
+        };
+
         if check_if_article_exists(&article_link, &articles_list) {
             continue;
         } else {
@@ -246,6 +253,7 @@ pub async fn write_articles_db(rss_selected: usize) {
                 title: title.to_string(),
                 summary: summary.to_string(),
                 article_link: article_link.to_string(),
+                author: author.to_string(),
                 pub_date: DateTime::from(DateTime::parse_from_rfc2822(pub_date).unwrap_or_else(
                     |_err| {
                         let err_msg =
@@ -377,6 +385,11 @@ pub fn render_rss_feed_list<'a>(
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
             format!("Published On: {}", selected_article.pub_date),
+            Style::default().fg(Color::White),
+        )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::styled(
+            format!("Author: {}", selected_article.author),
             Style::default().fg(Color::White),
         )]),
         Spans::from(vec![Span::raw("")]),

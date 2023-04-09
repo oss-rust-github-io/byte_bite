@@ -1,7 +1,7 @@
 [package]
 name = "byte_bite"
-version = "0.1.5"
-authors = ["Tapas Das", "dlaststark@gmail.com"]
+version = "0.1.6"
+authors = ["Tapas Das <dlaststark@gmail.com>"]
 edition = "2021"
 description = "Take a bite out of the news and updates with ByteBite, the bite-sized RSS feed reader that delivers all the essential news in a pocket-size format."
 readme = "README.md"
