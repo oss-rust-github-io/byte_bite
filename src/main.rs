@@ -12,8 +12,6 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use error_db::{ErrorCodes, ErrorMessages};
-use log::{debug, error};
-use log4rs;
 use std::io;
 use std::thread;
 use tui::{
@@ -28,7 +26,6 @@ use unicode_width::UnicodeWidthStr;
 
 const APP_HEADING: &str = "BYTE-BITE: Take a bite out of the news and updates with ByteBite";
 const MENU_TITLES: [&'static str; 5] = ["Add", "Delete", "Refresh", "Help", "Quit"];
-const LOGGING_CONFIG: &str = "logging_config.yaml";
 
 /// Defines the different TUI modes for user interaction
 pub enum InputMode {
@@ -102,15 +99,8 @@ fn show_popup(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    log4rs::init_file(LOGGING_CONFIG, Default::default()).unwrap_or_else(|_err| {
-        let err_msg = ErrorMessages::new(ErrorCodes::E0019_LOGGING_CONFIG_FILE_READ_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
-        panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
-    });
-
     enable_raw_mode().unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0001_ENABLE_RAW_MODE_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
@@ -121,12 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout)).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0002_NEW_CROSSTERM_TERMINAL_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
     terminal.clear().unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0003_TERMINAL_CLEAR_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
@@ -375,27 +363,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }).unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0004_APP_RENDERING_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         });
 
         if let CEvent::Key(key) = event::read().unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0005_KEYBOARD_READ_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         }) {
             match inputbox_app.input_mode {
                 InputMode::Normal => match key.code {
                     KeyCode::Char('a') => {
-                        debug!("Keypress 'a' --> Entering editing mode.");
                         inputbox_app.input_mode = InputMode::Editing;
                     }
                     KeyCode::Char('d') => {
-                        debug!("Keypress 'd' --> Removing selected RSS feed.");
                         let selected = rss_list_state.selected().unwrap_or_else(|| {
                             let err_msg =
                                 ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
-                            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
                         if selected > 0 {
@@ -403,11 +386,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyCode::Char('r') => {
-                        debug!("Keypress 'r' --> Articles data refresh has started.");
                         let selected = rss_list_state.selected().unwrap_or_else(|| {
                             let err_msg =
                                 ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
-                            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
 
@@ -419,10 +400,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .unwrap_or_else(|_err| {
                                         let err_msg = ErrorMessages::new(
                                             ErrorCodes::E0018_TOKIO_RUNTIME_BUILDER_FAILURE,
-                                        );
-                                        error!(
-                                            "{:?} - {}",
-                                            err_msg.error_code, err_msg.error_message
                                         );
                                         panic!(
                                             "{:?} - {}",
@@ -438,12 +415,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyCode::Char('h') => {
-                        debug!("Keypress 'h' --> Displaying Help popup.");
                         popup_app.show_help_popup = true;
                         inputbox_app.input_mode = InputMode::Popup;
                     }
                     KeyCode::PageDown => {
-                        debug!("Keypress 'PageDown' --> Navigating down in RSS feeds list.");
                         if let Some(selected) = rss_list_state.selected() {
                             let num_rss_feeds = read_rss_db().len();
                             if selected >= num_rss_feeds - 1 {
@@ -455,7 +430,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         articles_list_state.select(Some(0));
                     }
                     KeyCode::PageUp => {
-                        debug!("Keypress 'PageUp' --> Navigating up in RSS feeds list.");
                         if let Some(selected) = rss_list_state.selected() {
                             let num_rss_feeds = read_rss_db().len();
                             if selected > 0 {
@@ -467,7 +441,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         articles_list_state.select(Some(0));
                     }
                     KeyCode::Down => {
-                        debug!("Keypress 'Down' --> Navigating down in Articles feeds list.");
                         let rss_feed_list = read_rss_db();
 
                         let selected_rss_feed = rss_feed_list
@@ -475,13 +448,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let err_msg = ErrorMessages::new(
                                     ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE,
                                 );
-                                error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                                 panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             }))
                             .unwrap_or_else(|| {
                                 let err_msg =
                                     ErrorMessages::new(ErrorCodes::E0014_RSS_LIST_READ_FAILURE);
-                                error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                                 panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             })
                             .clone();
@@ -501,7 +472,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyCode::Up => {
-                        debug!("Keypress 'Up' --> Navigating up in Articles feeds list.");
                         let rss_feed_list = read_rss_db();
 
                         let selected_rss_feed = rss_feed_list
@@ -509,13 +479,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let err_msg = ErrorMessages::new(
                                     ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE,
                                 );
-                                error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                                 panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             }))
                             .unwrap_or_else(|| {
                                 let err_msg =
                                     ErrorMessages::new(ErrorCodes::E0014_RSS_LIST_READ_FAILURE);
-                                error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                                 panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             })
                             .clone();
@@ -535,11 +503,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyCode::Char('q') => {
-                        debug!("Keypress 'q' --> Exiting the application.");
                         disable_raw_mode().unwrap_or_else(|_err| {
                             let err_msg =
                                 ErrorMessages::new(ErrorCodes::E0015_DISABLE_RAW_MODE_FAILURE);
-                            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
 
@@ -552,14 +518,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         terminal.clear().unwrap_or_else(|_err| {
                             let err_msg =
                                 ErrorMessages::new(ErrorCodes::E0015_TERMINAL_CLEAR_FAILURE);
-                            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
 
                         terminal.show_cursor().unwrap_or_else(|_err| {
                             let err_msg =
                                 ErrorMessages::new(ErrorCodes::E0016_TERMINAL_SHOW_CURSOR_FAILURE);
-                            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         });
                         return Ok(());
@@ -568,28 +532,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 InputMode::Editing => match key.code {
                     KeyCode::Enter => {
-                        debug!("Keypress 'Enter' --> Adding new RSS feed into database.");
                         let input_text: String =
                             inputbox_app.text_input.drain(..).collect::<String>();
                         write_rss_db(input_text).await;
                     }
                     KeyCode::Char(c) => {
-                        debug!("Keypress 'c' --> Adding new characters into text box.");
                         inputbox_app.text_input.push(c);
                     }
                     KeyCode::Backspace => {
-                        debug!("Keypress 'Backspace' --> Removing characters from text box.");
                         inputbox_app.text_input.pop();
                     }
                     KeyCode::Esc => {
-                        debug!("Keypress 'Esc' --> Exiting edit mode.");
                         inputbox_app.input_mode = InputMode::Normal;
                     }
                     _ => {}
                 },
                 InputMode::Popup => match key.code {
                     KeyCode::Esc => {
-                        debug!("Keypress 'Esc' --> Exiting popup mode.");
                         popup_app.show_refresh_popup = false;
                         popup_app.show_help_popup = false;
                         inputbox_app.input_mode = InputMode::Normal;
