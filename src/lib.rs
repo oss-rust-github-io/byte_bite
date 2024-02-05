@@ -15,7 +15,6 @@ pub mod error_db;
 
 use chrono::prelude::{DateTime, Utc};
 use error_db::{ErrorCodes, ErrorMessages};
-use log::{debug, error, info};
 use reqwest;
 use rss::Channel;
 use serde::{Deserialize, Serialize};
@@ -27,10 +26,10 @@ use tui::{
 };
 
 /// JSON file path for RSS feed data
-pub const RSS_DB_PATH: &str = "data/rss_db.json";
+pub const RSS_DB_PATH: &str = "C:\\byte_bite\\data\\rss_db.json";
 
 /// JSON file path for RSS articles data
-pub const ARTICLE_DB_PATH: &str = "data/article_db.json";
+pub const ARTICLE_DB_PATH: &str = "C:\\byte_bite\\data\\article_db.json";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 /// Defines the metadata for storing RSS feed information
@@ -70,15 +69,12 @@ pub struct Articles {
 pub fn read_rss_db() -> Vec<RSSFeed> {
     let db_content = fs::read_to_string(RSS_DB_PATH).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
     let parsed: Vec<RSSFeed> = serde_json::from_str(&db_content).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
-    debug!("Data read successfully from RSS database.");
     parsed
 }
 
@@ -92,7 +88,6 @@ pub async fn write_rss_db(input_text: String) {
         .map(|p| p.rss_id)
         .unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0017_RSS_MAX_ID_FETCH_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         });
 
@@ -108,13 +103,11 @@ pub async fn write_rss_db(input_text: String) {
 
     let parsed_serde: &Vec<u8> = &serde_json::to_vec(&parsed).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
     fs::write(RSS_DB_PATH, parsed_serde).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
@@ -129,17 +122,13 @@ pub fn update_rss_db(rss_list_state: &mut ListState) {
 
         let parsed_serde: &Vec<u8> = &serde_json::to_vec(&rss_feed_list).unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         });
 
         fs::write(RSS_DB_PATH, parsed_serde).unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         });
-
-        debug!("Data updated successfully in RSS database.");
 
         if selected > 0 {
             rss_list_state.select(Some(selected - 1));
@@ -153,16 +142,13 @@ pub fn update_rss_db(rss_list_state: &mut ListState) {
 pub fn read_articles_db() -> Vec<Articles> {
     let db_content = fs::read_to_string(ARTICLE_DB_PATH).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0007_FILE_READ_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
     let parsed: Vec<Articles> = serde_json::from_str(&db_content).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
-    debug!("Data read successfully from Articles database.");
     parsed
 }
 
@@ -175,33 +161,24 @@ pub async fn write_articles_db(rss_selected: usize) {
         .get(rss_selected)
         .unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
-            debug!("RSS Index Selected: {}", rss_selected);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         })
         .clone();
-
-    info!("Selected RSS Feed: {:?}", selected_rss_feed);
 
     let response = reqwest::get(selected_rss_feed.url)
         .await
         .unwrap_or_else(|_err| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0010_HTTP_REQUEST_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         });
 
-    info!("Response status code: {}", response.status());
-
     let content = response.bytes().await.unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0011_HTTP_RESPONSE_PARSE_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
     let rss = Channel::read_from(&content[..]).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0012_RSS_CHANNEL_PARSE_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
@@ -214,7 +191,6 @@ pub async fn write_articles_db(rss_selected: usize) {
         Some(t) => t,
         None => 0,
     };
-    debug!("Article Id: {}", article_id);
 
     for item in rss.items().iter() {
         article_id += 1;
@@ -258,7 +234,6 @@ pub async fn write_articles_db(rss_selected: usize) {
                     |_err| {
                         let err_msg =
                             ErrorMessages::new(ErrorCodes::E0020_RFC2822_TIMESTAMP_PARSE_FAILURE);
-                        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
                     },
                 )),
@@ -271,17 +246,13 @@ pub async fn write_articles_db(rss_selected: usize) {
 
     let parsed_serde: &Vec<u8> = &serde_json::to_vec(&articles_list).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0006_SERDE_JSON_SERIALIZATION_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
 
     fs::write(ARTICLE_DB_PATH, parsed_serde).unwrap_or_else(|_err| {
         let err_msg = ErrorMessages::new(ErrorCodes::E0009_FILE_WRITE_FAILURE);
-        error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
     });
-
-    debug!("Data written successfully in Articles database.");
 }
 
 /// Renders the list of RSS feeds and articles, and articles summary in TUI
@@ -317,12 +288,10 @@ pub fn render_rss_feed_list<'a>(
     let selected_rss_feed = rss_feed_list
         .get(rss_list_state.selected().unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         }))
         .unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0014_RSS_LIST_READ_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         })
         .clone();
@@ -360,12 +329,10 @@ pub fn render_rss_feed_list<'a>(
     let selected_article = rss_articles_list
         .get(article_list_state.selected().unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0008_LIST_STATE_SELECTION_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         }))
         .unwrap_or_else(|| {
             let err_msg = ErrorMessages::new(ErrorCodes::E0013_ARTICLES_LIST_READ_FAILURE);
-            error!("{:?} - {}", err_msg.error_code, err_msg.error_message);
             panic!("{:?} - {}", err_msg.error_code, err_msg.error_message);
         })
         .clone();
